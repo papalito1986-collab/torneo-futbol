@@ -158,7 +158,7 @@ with tab1:
 
   st.dataframe(df_tabla, use_container_width=True)
 
-# Pestaña 2: Calendario, Resultados y Enlaces/Rutas de Fotos por Jornada
+# Pestaña 2: Calendario, Resultados e Imágenes por Jornada (Sin rutas de texto)
 with tab2:
   st.subheader("Calendario y Resultados por Jornada")
   jornada_sel = st.selectbox(
@@ -179,37 +179,22 @@ with tab2:
   )
 
   st.markdown("---")
-  st.subheader("📁 Archivos y Rutas de Fotos de los Partidos")
+  st.subheader("📸 Fotografías de los Partidos")
 
-  # Mostrar la ruta o nombre del archivo de la foto registrada en formato de lista/enlace
   hay_fotos_jornada = False
   for idx, row in df_jornada.iterrows():
     if idx in st.session_state.fotos_partidos:
       hay_fotos_jornada = True
       archivo_subido = st.session_state.fotos_partidos[idx]
-      nombre_archivo = (
-          archivo_subido.name
-          if hasattr(archivo_subido, "name")
-          else "imagen_partido.png"
-      )
 
-      st.markdown(
-          f"🔹 **Partido:** {row['Local']} ({row['Goles Local']}) vs"
-          f" {row['Visita']} ({row['Goles Visita']})"
-      )
-      st.code(
-          f"Ruta/Archivo registrado: media/partidos/{nombre_archivo}",
-          language="text",
-      )
-
-      # Si aún deseas ver la miniatura al hacer clic o de forma desplegable:
+      # Se muestra únicamente el expansor limpio sin rutas de texto
       with st.expander(
-          f"Ver imagen vinculada: {row['Local']} vs {row['Visita']}"
+          f"📷 Ver foto del partido: {row['Local']} vs {row['Visita']}"
       ):
         st.image(archivo_subido, use_container_width=True)
 
   if not hay_fotos_jornada:
-    st.info("No hay rutas o archivos de fotos registrados para esta jornada.")
+    st.info("No hay fotos registradas para los partidos de esta jornada.")
 
 # Pestaña 3: Tabla de Goleadores
 with tab3:
@@ -226,7 +211,7 @@ with tab3:
     df_gols_sorted.index = df_gols_sorted.index + 1
     st.dataframe(df_gols_sorted, use_container_width=True)
 
-# Pestaña 4: Panel para actualizar resultados y resetear datos protegido por contraseña
+# Pestaña 4: Panel para Administrar (Resultados, Goleadores, Borrar Goleador y Reset)
 with tab4:
   st.subheader("⚙ Panel de Administración")
   st.markdown("Acceso exclusivo para el organizador del torneo.")
@@ -243,7 +228,8 @@ with tab4:
         "¿Qué deseas realizar?",
         [
             "Actualizar Resultados y Fotos",
-            "Actualizar Goleadores",
+            "Actualizar o Agregar Goleadores",
+            "🗑️ Eliminar Goleadores",
             "⚠️ Reiniciar Torneo (Reset)",
         ],
     )
@@ -280,7 +266,7 @@ with tab4:
           st.rerun()
 
       st.markdown("---")
-      st.subheader("📷 Subir o cambiar archivo/ruta de foto del partido")
+      st.subheader("📷 Subir o cambiar foto del partido")
       partido_foto_idx = st.selectbox(
           "Selecciona el partido para la foto:",
           df.index,
@@ -291,15 +277,15 @@ with tab4:
           "Sube la imagen del partido (PNG, JPG)", type=["png", "jpg", "jpeg"]
       )
 
-      if st.button("Guardar Referencia de Foto"):
+      if st.button("Guardar Foto"):
         if foto_subida is not None:
           st.session_state.fotos_partidos[partido_foto_idx] = foto_subida
-          st.success("¡Referencia de foto guardada correctamente!")
+          st.success("¡Foto guardada correctamente!")
           st.rerun()
         else:
           st.warning("Por favor selecciona una imagen primero.")
 
-    elif admin_opcion == "Actualizar Goleadores":
+    elif admin_opcion == "Actualizar o Agregar Goleadores":
       with st.form("form_goleador"):
         lista_opciones = ["+ Agregar Nuevo Jugador"]
         if not df_gols.empty:
@@ -340,6 +326,35 @@ with tab4:
             st.success("¡Goles actualizados con éxito!")
             st.rerun()
 
+    elif admin_opcion == "🗑️ Eliminar Goleadores":
+      st.subheader("Eliminar registros de goleadores")
+      if df_gols.empty:
+        st.info("No hay goleadores registrados actualmente para eliminar.")
+      else:
+        with st.form("form_eliminar_goleador"):
+          jugadores_a_borrar = st.multiselect(
+              "Selecciona el o los jugadores que deseas eliminar:",
+              df_gols["Jugador"].tolist(),
+          )
+          eliminar_btn = st.form_submit_button(
+              "Eliminar Jugadores Seleccionados"
+          )
+
+          if eliminar_btn and jugadores_a_borrar:
+            st.session_state.df_goleadores = df_gols[
+                ~df_gols["Jugador"].isin(jugadores_a_borrar)
+            ].reset_index(drop=True)
+            st.success("¡Los goleadores seleccionados han sido eliminados!")
+            st.rerun()
+
+        st.markdown("---")
+        if st.button("🗑️ Vaciar Tabla de Goleadores por Completo"):
+          st.session_state.df_goleadores = pd.DataFrame(
+              columns=["Jugador", "Equipo", "Goles"]
+          )
+          st.success("¡Se ha vaciado la tabla de goleadores por completo!")
+          st.rerun()
+
     elif admin_opcion == "⚠️ Reiniciar Torneo (Reset)":
       st.warning(
           "⚠️ **¡CUIDADO!** Esta acción borrará todos los marcadores, goles,"
@@ -352,7 +367,6 @@ with tab4:
 
       if st.button("Ejecutar Reinicio Completo", type="primary"):
         if confirmar_reset:
-          # Borrar las variables de sesión para reiniciar los valores por defecto
           del st.session_state.df_partidos
           del st.session_state.fotos_partidos
           del st.session_state.df_goleadores
