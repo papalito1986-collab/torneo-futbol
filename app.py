@@ -38,7 +38,7 @@ equipos_lista = [
     "Pisacorres",
 ]
 
-# 2. Inicializar los datos de los partidos
+# 2. Inicializar los datos de los partidos (En ceros y sin jugar desde el inicio)
 if "df_partidos" not in st.session_state:
   st.session_state.df_partidos = pd.DataFrame({
       "Jornada": [1, 1, 1, 1, 1, 2, 2, 2, 2, 2],
@@ -86,7 +86,7 @@ if "df_partidos" not in st.session_state:
 if "fotos_partidos" not in st.session_state:
   st.session_state.fotos_partidos = {}
 
-# 3. Inicializar tabla de Goleadores vacía
+# 3. Inicializar tabla de Goleadores vacía desde el inicio
 if "df_goleadores" not in st.session_state:
   st.session_state.df_goleadores = pd.DataFrame(
       columns=["Jugador", "Equipo", "Goles"]
@@ -208,7 +208,7 @@ with tab3:
 
 # Pestaña 4: Panel para actualizar resultados protegido por contraseña
 with tab4:
-  st.subheader("⚙️ Panel de Administración")
+  st.subheader("⚙️️ Panel de Administración")
   st.markdown("Acceso exclusivo para el organizador del torneo.")
 
   PASSWORD_ADMIN = "crit2026"
