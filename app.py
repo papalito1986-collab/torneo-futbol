@@ -82,7 +82,7 @@ if "df_partidos" not in st.session_state:
       ],
   })
 
-# Diccionario independiente para guardar las fotos por índice de partido sin errores de Pandas
+# Diccionario independiente para guardar las fotos por índice de partido
 if "fotos_partidos" not in st.session_state:
   st.session_state.fotos_partidos = {}
 
@@ -158,7 +158,7 @@ with tab1:
 
   st.dataframe(df_tabla, use_container_width=True)
 
-# Pestaña 2: Calendario, Resultados y Fotos por Jornada
+# Pestaña 2: Calendario, Resultados y Enlaces/Rutas de Fotos por Jornada
 with tab2:
   st.subheader("Calendario y Resultados por Jornada")
   jornada_sel = st.selectbox(
@@ -167,29 +167,49 @@ with tab2:
   df_jornada = df[df["Jornada"] == jornada_sel]
 
   st.dataframe(
-      df_jornada[["Jornada", "Local", "Goles Local", "Goles Visita", "Visita", "Jugado"]],
+      df_jornada[[
+          "Jornada",
+          "Local",
+          "Goles Local",
+          "Goles Visita",
+          "Visita",
+          "Jugado",
+      ]],
       use_container_width=True,
   )
 
   st.markdown("---")
-  st.subheader("📸 Fotos y Momentos de los Partidos")
+  st.subheader("📁 Archivos y Rutas de Fotos de los Partidos")
 
-  # Filtrar qué partidos de esta jornada tienen foto guardada
+  # Mostrar la ruta o nombre del archivo de la foto registrada en formato de lista/enlace
   hay_fotos_jornada = False
   for idx, row in df_jornada.iterrows():
     if idx in st.session_state.fotos_partidos:
       hay_fotos_jornada = True
-      st.markdown(
-          f"**{row['Local']} {row['Goles Local']} - {row['Goles Visita']} {row['Visita']}**"
-      )
-      st.image(
-          st.session_state.fotos_partidos[idx],
-          caption=f"Partido: {row['Local']} vs {row['Visita']}",
-          use_container_width=True,
+      archivo_subido = st.session_state.fotos_partidos[idx]
+      nombre_archivo = (
+          archivo_subido.name
+          if hasattr(archivo_subido, "name")
+          else "imagen_partido.png"
       )
 
+      st.markdown(
+          f"🔹 **Partido:** {row['Local']} ({row['Goles Local']}) vs"
+          f" {row['Visita']} ({row['Goles Visita']})"
+      )
+      st.code(
+          f"Ruta/Archivo registrado: media/partidos/{nombre_archivo}",
+          language="text",
+      )
+
+      # Si aún deseas ver la miniatura al hacer clic o de forma desplegable:
+      with st.expander(
+          f"Ver imagen vinculada: {row['Local']} vs {row['Visita']}"
+      ):
+        st.image(archivo_subido, use_container_width=True)
+
   if not hay_fotos_jornada:
-    st.info("No hay fotos subidas para los partidos de esta jornada.")
+    st.info("No hay rutas o archivos de fotos registrados para esta jornada.")
 
 # Pestaña 3: Tabla de Goleadores
 with tab3:
@@ -206,9 +226,9 @@ with tab3:
     df_gols_sorted.index = df_gols_sorted.index + 1
     st.dataframe(df_gols_sorted, use_container_width=True)
 
-# Pestaña 4: Panel para actualizar resultados protegido por contraseña
+# Pestaña 4: Panel para actualizar resultados y resetear datos protegido por contraseña
 with tab4:
-  st.subheader("⚙️️ Panel de Administración")
+  st.subheader("⚙ Panel de Administración")
   st.markdown("Acceso exclusivo para el organizador del torneo.")
 
   PASSWORD_ADMIN = "crit2026"
@@ -217,11 +237,15 @@ with tab4:
   )
 
   if pwd_ingresada == PASSWORD_ADMIN:
-    st.success("¡Contraseña correcta! Ya puedes actualizar la información.")
+    st.success("¡Contraseña correcta! Ya puedes administrar el torneo.")
 
     admin_opcion = st.radio(
-        "¿Qué deseas actualizar?",
-        ["Actualizar Resultados y Fotos", "Actualizar Goleadores"],
+        "¿Qué deseas realizar?",
+        [
+            "Actualizar Resultados y Fotos",
+            "Actualizar Goleadores",
+            "⚠️ Reiniciar Torneo (Reset)",
+        ],
     )
 
     if admin_opcion == "Actualizar Resultados y Fotos":
@@ -256,7 +280,7 @@ with tab4:
           st.rerun()
 
       st.markdown("---")
-      st.subheader("📷 Subir o cambiar foto del partido")
+      st.subheader("📷 Subir o cambiar archivo/ruta de foto del partido")
       partido_foto_idx = st.selectbox(
           "Selecciona el partido para la foto:",
           df.index,
@@ -267,10 +291,10 @@ with tab4:
           "Sube la imagen del partido (PNG, JPG)", type=["png", "jpg", "jpeg"]
       )
 
-      if st.button("Guardar Foto"):
+      if st.button("Guardar Referencia de Foto"):
         if foto_subida is not None:
           st.session_state.fotos_partidos[partido_foto_idx] = foto_subida
-          st.success("¡Foto subida y guardada correctamente!")
+          st.success("¡Referencia de foto guardada correctamente!")
           st.rerun()
         else:
           st.warning("Por favor selecciona una imagen primero.")
@@ -315,6 +339,32 @@ with tab4:
             df_gols.loc[idx_g, "Goles"] = actualizar_goles
             st.success("¡Goles actualizados con éxito!")
             st.rerun()
+
+    elif admin_opcion == "⚠️ Reiniciar Torneo (Reset)":
+      st.warning(
+          "⚠️ **¡CUIDADO!** Esta acción borrará todos los marcadores, goles,"
+          " estadísticas y fotos registradas, regresando todo a cero."
+      )
+
+      confirmar_reset = st.checkbox(
+          "Confirmo que deseo reiniciar todos los datos del torneo"
+      )
+
+      if st.button("Ejecutar Reinicio Completo", type="primary"):
+        if confirmar_reset:
+          # Borrar las variables de sesión para reiniciar los valores por defecto
+          del st.session_state.df_partidos
+          del st.session_state.fotos_partidos
+          del st.session_state.df_goleadores
+          st.success(
+              "¡El torneo se ha reiniciado por completo exitosamente!"
+          )
+          st.rerun()
+        else:
+          st.error(
+              "Debes marcar la casilla de confirmación para poder reiniciar los"
+              " datos."
+          )
 
   elif pwd_ingresada != "":
     st.error("Contraseña incorrecta. Intenta de nuevo.")
