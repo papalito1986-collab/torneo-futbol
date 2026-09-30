@@ -10,15 +10,10 @@ st.set_page_config(
 col_logo, col_titulo = st.columns([1, 5])
 
 with col_logo:
-  # Reemplaza 'logo_crit.png' por la ruta de tu archivo de logo o URL
   try:
-    st.image(
-        "logo_crit.png", width=120
-    )  # Si tienes la imagen en la misma carpeta
+    st.image("logo_crit.png", width=120)
   except:
-    st.write(
-        "🏟️"
-    )  # Emoji de respaldo por si el archivo no está cargado todavía
+    st.write("🏟️")
 
 with col_titulo:
   st.title("🏆 Torneo de Fútbol - CRIT SONORA")
@@ -43,7 +38,7 @@ equipos_lista = [
     "Pisacorres",
 ]
 
-# 2. Inicializar los datos de los partidos (añadimos columna para la foto)
+# 2. Inicializar los datos de los partidos
 if "df_partidos" not in st.session_state:
   st.session_state.df_partidos = pd.DataFrame({
       "Jornada": [1, 1, 1, 1, 1, 2, 2, 2, 2, 2],
@@ -85,19 +80,11 @@ if "df_partidos" not in st.session_state:
           False,
           False,
       ],
-      "Foto": [
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-      ],
   })
+
+# Diccionario independiente para guardar las fotos por índice de partido sin errores de Pandas
+if "fotos_partidos" not in st.session_state:
+  st.session_state.fotos_partidos = {}
 
 # 3. Inicializar tabla de Goleadores vacía
 if "df_goleadores" not in st.session_state:
@@ -186,20 +173,23 @@ with tab2:
 
   st.markdown("---")
   st.subheader("📸 Fotos y Momentos de los Partidos")
-  partidos_con_foto = df_jornada[df_jornada["Foto"].notnull()]
 
-  if partidos_con_foto.empty:
-    st.info("No hay fotos subidas para los partidos de esta jornada.")
-  else:
-    for _, row in partidos_con_foto.iterrows():
+  # Filtrar qué partidos de esta jornada tienen foto guardada
+  hay_fotos_jornada = False
+  for idx, row in df_jornada.iterrows():
+    if idx in st.session_state.fotos_partidos:
+      hay_fotos_jornada = True
       st.markdown(
           f"**{row['Local']} {row['Goles Local']} - {row['Goles Visita']} {row['Visita']}**"
       )
       st.image(
-          row["Foto"],
+          st.session_state.fotos_partidos[idx],
           caption=f"Partido: {row['Local']} vs {row['Visita']}",
           use_container_width=True,
       )
+
+  if not hay_fotos_jornada:
+    st.info("No hay fotos subidas para los partidos de esta jornada.")
 
 # Pestaña 3: Tabla de Goleadores
 with tab3:
@@ -279,7 +269,7 @@ with tab4:
 
       if st.button("Guardar Foto"):
         if foto_subida is not None:
-          df.loc[partido_foto_idx, "Foto"] = foto_subida
+          st.session_state.fotos_partidos[partido_foto_idx] = foto_subida
           st.success("¡Foto subida y guardada correctamente!")
           st.rerun()
         else:
