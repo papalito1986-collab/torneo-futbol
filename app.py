@@ -24,19 +24,20 @@ with col_titulo:
 
 st.markdown("---")
 
-# 1. Definición de los 10 equipos del torneo
-equipos_lista = [
-    "Crit Sonoa",
-    "TE",
-    "Leoni",
-    "Clandestinos",
-    "Parrilleros",
-    "T&P",
-    "Malcriados",
-    "Arrabaleros",
-    "Costeños",
-    "Pisacorres",
-]
+# 1. Inicializar la lista de equipos en el session_state para poder modificarla o eliminarla dinámicamente
+if "equipos_lista" not in st.session_state:
+  st.session_state.equipos_lista = [
+      "Crit Sonoa",
+      "TE",
+      "Leoni",
+      "Clandestinos",
+      "Parrilleros",
+      "T&P",
+      "Malcriados",
+      "Arrabaleros",
+      "Costeños",
+      "Pisacorres",
+  ]
 
 # 2. Inicializar los datos de los partidos (En ceros y sin jugar desde el inicio)
 if "df_partidos" not in st.session_state:
@@ -92,6 +93,7 @@ if "df_goleadores" not in st.session_state:
       columns=["Jugador", "Equipo", "Goles"]
   )
 
+equipos_lista = st.session_state.equipos_lista
 df = st.session_state.df_partidos
 df_gols = st.session_state.df_goleadores
 
@@ -125,26 +127,30 @@ with tab1:
     loc, vis = row["Local"], row["Visita"]
     g_loc, g_vis = row["Goles Local"], row["Goles Visita"]
 
-    stats[loc]["JJ"] += 1
-    stats[vis]["JJ"] += 1
-    stats[loc]["GF"] += g_loc
-    stats[loc]["GC"] += g_vis
-    stats[vis]["GF"] += g_vis
-    stats[vis]["GC"] += g_loc
+    # Validar que los equipos sigan existiendo en la lista actual
+    if loc in stats:
+      stats[loc]["JJ"] += 1
+      stats[loc]["GF"] += g_loc
+      stats[loc]["GC"] += g_vis
+    if vis in stats:
+      stats[vis]["JJ"] += 1
+      stats[vis]["GF"] += g_vis
+      stats[vis]["GC"] += g_loc
 
-    if g_loc > g_vis:
-      stats[loc]["G"] += 1
-      stats[loc]["Pts"] += 3
-      stats[vis]["P"] += 1
-    elif g_loc < g_vis:
-      stats[vis]["G"] += 1
-      stats[vis]["Pts"] += 3
-      stats[loc]["P"] += 1
-    else:
-      stats[loc]["E"] += 1
-      stats[loc]["Pts"] += 1
-      stats[vis]["E"] += 1
-      stats[vis]["Pts"] += 1
+    if loc in stats and vis in stats:
+      if g_loc > g_vis:
+        stats[loc]["G"] += 1
+        stats[loc]["Pts"] += 3
+        stats[vis]["P"] += 1
+      elif g_loc < g_vis:
+        stats[vis]["G"] += 1
+        stats[vis]["Pts"] += 3
+        stats[loc]["P"] += 1
+      else:
+        stats[loc]["E"] += 1
+        stats[loc]["Pts"] += 1
+        stats[vis]["E"] += 1
+        stats[vis]["Pts"] += 1
 
   for eq in stats:
     stats[eq]["DG"] = stats[eq]["GF"] - stats[eq]["GC"]
@@ -158,7 +164,7 @@ with tab1:
 
   st.dataframe(df_tabla, use_container_width=True)
 
-# Pestaña 2: Calendario, Resultados e Imágenes por Jornada (Sin rutas de texto)
+# Pestaña 2: Calendario, Resultados e Imágenes por Jornada
 with tab2:
   st.subheader("Calendario y Resultados por Jornada")
   jornada_sel = st.selectbox(
@@ -187,7 +193,6 @@ with tab2:
       hay_fotos_jornada = True
       archivo_subido = st.session_state.fotos_partidos[idx]
 
-      # Se muestra únicamente el expansor limpio sin rutas de texto
       with st.expander(
           f"📷 Ver foto del partido: {row['Local']} vs {row['Visita']}"
       ):
@@ -211,7 +216,7 @@ with tab3:
     df_gols_sorted.index = df_gols_sorted.index + 1
     st.dataframe(df_gols_sorted, use_container_width=True)
 
-# Pestaña 4: Panel para Administrar (Resultados, Goleadores, Borrar Goleador y Reset)
+# Pestaña 4: Panel para Administrar (Equipos, Resultados, Goleadores y Reset)
 with tab4:
   st.subheader("⚙ Panel de Administración")
   st.markdown("Acceso exclusivo para el organizador del torneo.")
@@ -227,6 +232,7 @@ with tab4:
     admin_opcion = st.radio(
         "¿Qué deseas realizar?",
         [
+            "🏟️ Administrar Equipos (Agregar / Modificar / Eliminar)",
             "Actualizar Resultados y Fotos",
             "Actualizar o Agregar Goleadores",
             "🗑️ Eliminar Goleadores",
@@ -234,7 +240,82 @@ with tab4:
         ],
     )
 
-    if admin_opcion == "Actualizar Resultados y Fotos":
+    if admin_opcion == "🏟️ Administrar Equipos (Agregar / Modificar / Eliminar)":
+      st.subheader("Gestión de Equipos del Torneo")
+      st.write("Equipos actuales registrados:", ", ".join(equipos_lista))
+
+      op_equipo = st.selectbox(
+          "Selecciona una acción:",
+          ["Agregar Nuevo Equipo", "Modificar / Renombrar Equipo", "Eliminar Equipo"],
+      )
+
+      if op_equipo == "Agregar Nuevo Equipo":
+        with st.form("form_add_equipo"):
+          nuevo_eq = st.text_input("Nombre del nuevo equipo:")
+          btn_add_eq = st.form_submit_button("Agregar Equipo")
+          if btn_add_eq:
+            if nuevo_eq and nuevo_eq not in equipos_lista:
+              st.session_state.equipos_lista.append(nuevo_eq)
+              st.success(f"¡Equipo '{nuevo_eq}' agregado con éxito!")
+              st.rerun()
+            else:
+              st.warning(
+                  "El nombre está vacío o ya existe en la lista de equipos."
+              )
+
+      elif op_equipo == "Modificar / Renombrar Equipo":
+        with st.form("form_edit_equipo"):
+          eq_a_mod = st.selectbox(
+              "Selecciona el equipo a modificar:", equipos_lista
+          )
+          nuevo_nombre_eq = st.text_input(
+              "Nuevo nombre para el equipo:", value=eq_a_mod
+          )
+          btn_edit_eq = st.form_submit_button("Guardar Cambios")
+          if btn_edit_eq:
+            if nuevo_nombre_eq and nuevo_nombre_eq not in equipos_lista:
+              # Actualizar en la lista de equipos
+              idx_e = equipos_lista.index(eq_a_mod)
+              st.session_state.equipos_lista[idx_e] = nuevo_nombre_eq
+
+              # Actualizar también en los partidos (Local y Visita) para no romper resultados
+              df["Local"] = df["Local"].replace(eq_a_mod, nuevo_nombre_eq)
+              df["Visita"] = df["Visita"].replace(eq_a_mod, nuevo_nombre_eq)
+
+              # Actualizar en goleadores si aplica
+              if not df_gols.empty:
+                df_gols["Equipo"] = df_gols["Equipo"].replace(
+                    eq_a_mod, nuevo_nombre_eq
+                )
+
+              st.success(
+                  f"¡Equipo actualizado de '{eq_a_mod}' a '{nuevo_nombre_eq}'"
+                  " con éxito!"
+              )
+              st.rerun()
+            else:
+              st.warning("El nuevo nombre está vacío o ya se encuentra registrado.")
+
+      elif op_equipo == "Eliminar Equipo":
+        with st.form("form_del_equipo"):
+          eq_a_del = st.selectbox(
+              "Selecciona el equipo que deseas eliminar:", equipos_lista
+          )
+          btn_del_eq = st.form_submit_button("Eliminar Equipo")
+          if btn_del_eq:
+            if len(equipos_lista) > 2:
+              st.session_state.equipos_lista.remove(eq_a_del)
+              st.success(
+                  f"¡El equipo '{eq_a_del}' ha sido eliminado del torneo!"
+              )
+              st.rerun()
+            else:
+              st.error(
+                  "El torneo debe tener al menos 2 equipos registrados de"
+                  " manera activa."
+              )
+
+    elif admin_opcion == "Actualizar Resultados y Fotos":
       with st.form("form_resultado"):
         partido_idx = st.selectbox(
             "Selecciona el partido a actualizar:",
@@ -326,7 +407,7 @@ with tab4:
             st.success("¡Goles actualizados con éxito!")
             st.rerun()
 
-    elif admin_opcion == "🗑️ Eliminar Goleadores":
+    elif admin_opcion == "🗑️️ Eliminar Goleadores":
       st.subheader("Eliminar registros de goleadores")
       if df_gols.empty:
         st.info("No hay goleadores registrados actualmente para eliminar.")
@@ -367,6 +448,7 @@ with tab4:
 
       if st.button("Ejecutar Reinicio Completo", type="primary"):
         if confirmar_reset:
+          del st.session_state.equipos_lista
           del st.session_state.df_partidos
           del st.session_state.fotos_partidos
           del st.session_state.df_goleadores
