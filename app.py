@@ -225,7 +225,7 @@ with tab4:
             df_gols["Jugador"].tolist() + ["+ Agregar Nuevo Jugador"],
         )
 
-        if jugador_sel == "+ Agregar Nuevo Jugador"]:
+        if jugador_sel == "+ Agregar Nuevo Jugador":
           nuevo_jugador = st.text_input("Nombre del Nuevo Jugador")
           nuevo_equipo = st.selectbox("Equipo del Jugador", equipos_lista)
           nuevos_goles = st.number_input(
