@@ -6,6 +6,28 @@ st.set_page_config(
     page_title="Torneo de Fútbol - Teletón Sonora", page_icon="⚽", layout="wide"
 )
 
+# --- ESTILOS CSS PERSONALIZADOS ---
+st.markdown("""
+    <style>
+        /* Ocultar el menú superior, el pie de página y el ícono de GitHub */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+
+        /* Fondo general de la aplicación con degradado morado 3D profundo */
+        .stApp {
+            background: linear-gradient(135deg, #3A0CA3 0%, #4A154B 50%, #240046 100%);
+            color: #FFFFFF;
+        }
+        
+        /* Resto de tus estilos... */
+    </style>
+""", unsafe_allow_html=True)
+# Configuración inicial de la página web
+st.set_page_config(
+    page_title="Torneo de Fútbol - Teletón Sonora", page_icon="⚽", layout="wide"
+)
+
 # --- ESTILOS CSS PERSONALIZADOS (Tema Teletón 3D Morado Intenso y Amarillo Brillante) ---
 st.markdown("""
     <style>
