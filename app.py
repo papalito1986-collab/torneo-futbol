@@ -6,8 +6,28 @@ st.set_page_config(
     page_title="Torneo de Fútbol - Dashboard", page_icon="⚽", layout="wide"
 )
 
-st.title("🏆 Dashboard Oficial del Torneo de Fútbol de CRIT SONORA")
-st.markdown("Seguimiento en tiempo real de resultados, tabla general y estadísticas.")
+# --- ENCABEZADO CON LOGO ---
+col_logo, col_titulo = st.columns([1, 5])
+
+with col_logo:
+  # Reemplaza 'logo_crit.png' por la ruta de tu archivo de logo o URL
+  try:
+    st.image(
+        "logo_crit.png", width=120
+    )  # Si tienes la imagen en la misma carpeta
+  except:
+    st.write(
+        "🏟️"
+    )  # Emoji de respaldo por si el archivo no está cargado todavía
+
+with col_titulo:
+  st.title("🏆 Torneo de Fútbol - CRIT SONORA")
+  st.markdown(
+      "Seguimiento en tiempo real de resultados, tabla general y"
+      " estadísticas."
+  )
+
+st.markdown("---")
 
 # 1. Definición de los 10 equipos del torneo
 equipos_lista = [
@@ -23,7 +43,7 @@ equipos_lista = [
     "Pisacorres",
 ]
 
-# 2. Inicializar los datos de los partidos
+# 2. Inicializar los datos de los partidos (añadimos columna para la foto)
 if "df_partidos" not in st.session_state:
   st.session_state.df_partidos = pd.DataFrame({
       "Jornada": [1, 1, 1, 1, 1, 2, 2, 2, 2, 2],
@@ -33,20 +53,20 @@ if "df_partidos" not in st.session_state:
           "Leoni",
           "Clandestinos",
           "Parrilleros",
-          "T&P",
-          "Malcriados",
-          "Arrabaleros",
-          "Costeños",
-          "Pisacorres",
+          "Crit Sonoa",
+          "TE",
+          "Leoni",
+          "Clandestinos",
+          "Parrilleros",
       ],
-      "Goles Local": [2, 1, 3, 0, 2, 1, 2, 1, 0, 2],
-      "Goles Visita": [1, 1, 1, 2, 2, 1, 2, 3, 0, 2],
+      "Goles Local": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "Goles Visita": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       "Visita": [
           "TE",
           "Leoni",
           "Clandestinos",
           "Parrilleros",
-          "Crit Sonoa",
+          "T&P",
           "Malcriados",
           "Arrabaleros",
           "Costeños",
@@ -54,32 +74,36 @@ if "df_partidos" not in st.session_state:
           "T&P",
       ],
       "Jugado": [
-          True,
-          True,
-          True,
-          True,
-          True,
-          True,
-          True,
-          True,
-          True,
-          True,
+          False,
+          False,
+          False,
+          False,
+          False,
+          False,
+          False,
+          False,
+          False,
+          False,
+      ],
+      "Foto": [
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
       ],
   })
 
-# 3. Inicializar datos de Goleadores
+# 3. Inicializar tabla de Goleadores vacía
 if "df_goleadores" not in st.session_state:
-  st.session_state.df_goleadores = pd.DataFrame({
-      "Jugador": [
-          "Carlos Pérez",
-          "Juan Gómez",
-          "Mario López",
-          "Alejandro Ruiz",
-          "José Torres",
-      ],
-      "Equipo": ["Crit Sonoa", "Leoni", "T&P", "Parrilleros", "Malcriados"],
-      "Goles": [5, 4, 3, 3, 2],
-  })
+  st.session_state.df_goleadores = pd.DataFrame(
+      columns=["Jugador", "Equipo", "Goles"]
+  )
 
 df = st.session_state.df_partidos
 df_gols = st.session_state.df_goleadores
@@ -147,33 +171,57 @@ with tab1:
 
   st.dataframe(df_tabla, use_container_width=True)
 
-# Pestaña 2: Calendario y Resultados por Jornada
+# Pestaña 2: Calendario, Resultados y Fotos por Jornada
 with tab2:
   st.subheader("Calendario y Resultados por Jornada")
   jornada_sel = st.selectbox(
       "Selecciona la Jornada:", sorted(df["Jornada"].unique())
   )
   df_jornada = df[df["Jornada"] == jornada_sel]
-  st.dataframe(df_jornada, use_container_width=True)
+
+  st.dataframe(
+      df_jornada[["Jornada", "Local", "Goles Local", "Goles Visita", "Visita", "Jugado"]],
+      use_container_width=True,
+  )
+
+  st.markdown("---")
+  st.subheader("📸 Fotos y Momentos de los Partidos")
+  partidos_con_foto = df_jornada[df_jornada["Foto"].notnull()]
+
+  if partidos_con_foto.empty:
+    st.info("No hay fotos subidas para los partidos de esta jornada.")
+  else:
+    for _, row in partidos_con_foto.iterrows():
+      st.markdown(
+          f"**{row['Local']} {row['Goles Local']} - {row['Goles Visita']} {row['Visita']}**"
+      )
+      st.image(
+          row["Foto"],
+          caption=f"Partido: {row['Local']} vs {row['Visita']}",
+          use_container_width=True,
+      )
 
 # Pestaña 3: Tabla de Goleadores
 with tab3:
   st.subheader("👟 Máximos Goleadores del Torneo")
-  df_gols_sorted = df_gols.sort_values(by="Goles", ascending=False).reset_index(
-      drop=True
-  )
-  df_gols_sorted.index = df_gols_sorted.index + 1
-  st.dataframe(df_gols_sorted, use_container_width=True)
+  if df_gols.empty:
+    st.info(
+        "Aún no hay goleadores registrados. Se irán agregando desde el panel de"
+        " administración."
+    )
+  else:
+    df_gols_sorted = df_gols.sort_values(by="Goles", ascending=False).reset_index(
+        drop=True
+    )
+    df_gols_sorted.index = df_gols_sorted.index + 1
+    st.dataframe(df_gols_sorted, use_container_width=True)
 
 # Pestaña 4: Panel para actualizar resultados protegido por contraseña
 with tab4:
   st.subheader("⚙️ Panel de Administración")
   st.markdown("Acceso exclusivo para el organizador del torneo.")
 
-  # Configura aquí tu contraseña de administrador
   PASSWORD_ADMIN = "crit2026"
-
-  # Campo de contraseña
   pwd_ingresada = st.text_input(
       "Introduce la contraseña de administrador:", type="password"
   )
@@ -181,13 +229,12 @@ with tab4:
   if pwd_ingresada == PASSWORD_ADMIN:
     st.success("¡Contraseña correcta! Ya puedes actualizar la información.")
 
-    # Sub-pestañas dentro del panel de administración
     admin_opcion = st.radio(
         "¿Qué deseas actualizar?",
-        ["Actualizar Resultados de Partidos", "Actualizar Goleadores"],
+        ["Actualizar Resultados y Fotos", "Actualizar Goleadores"],
     )
 
-    if admin_opcion == "Actualizar Resultados de Partidos":
+    if admin_opcion == "Actualizar Resultados y Fotos":
       with st.form("form_resultado"):
         partido_idx = st.selectbox(
             "Selecciona el partido a actualizar:",
@@ -210,7 +257,7 @@ with tab4:
             "¿Partido Jugado?", value=bool(df.loc[partido_idx, "Jugado"])
         )
 
-        submitted = st.form_submit_button("Guardar Resultado del Partido")
+        submitted = st.form_submit_button("Guardar Resultado")
         if submitted:
           df.loc[partido_idx, "Goles Local"] = nuevo_g_loc
           df.loc[partido_idx, "Goles Visita"] = nuevo_g_vis
@@ -218,12 +265,35 @@ with tab4:
           st.success("¡Resultado actualizado con éxito!")
           st.rerun()
 
+      st.markdown("---")
+      st.subheader("📷 Subir o cambiar foto del partido")
+      partido_foto_idx = st.selectbox(
+          "Selecciona el partido para la foto:",
+          df.index,
+          key="select_foto",
+          format_func=lambda i: f"J{df.loc[i, 'Jornada']}: {df.loc[i, 'Local']} vs {df.loc[i, 'Visita']}",
+      )
+      foto_subida = st.file_uploader(
+          "Sube la imagen del partido (PNG, JPG)", type=["png", "jpg", "jpeg"]
+      )
+
+      if st.button("Guardar Foto"):
+        if foto_subida is not None:
+          df.loc[partido_foto_idx, "Foto"] = foto_subida
+          st.success("¡Foto subida y guardada correctamente!")
+          st.rerun()
+        else:
+          st.warning("Por favor selecciona una imagen primero.")
+
     elif admin_opcion == "Actualizar Goleadores":
       with st.form("form_goleador"):
-        jugador_sel = st.selectbox(
-            "Selecciona o registra jugador:",
-            df_gols["Jugador"].tolist() + ["+ Agregar Nuevo Jugador"],
-        )
+        lista_opciones = ["+ Agregar Nuevo Jugador"]
+        if not df_gols.empty:
+          lista_opciones = df_gols["Jugador"].tolist() + [
+              "+ Agregar Nuevo Jugador"
+          ]
+
+        jugador_sel = st.selectbox("Selecciona o registra jugador:", lista_opciones)
 
         if jugador_sel == "+ Agregar Nuevo Jugador":
           nuevo_jugador = st.text_input("Nombre del Nuevo Jugador")
