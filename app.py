@@ -67,14 +67,20 @@ st.markdown("""
             color: #3A0CA3 !important;
         }
 
-        /* Tablas y DataFrames con diseño flotante y contraste nítido */
+        /* Tablas y DataFrames con diseño flotante y contraste nítido, optimizadas para 16 equipos sin scroll excesivo */
         .dataframe {
             background-color: rgba(255, 255, 255, 0.95) !important;
             color: #1a1a1a !important;
             border-radius: 12px !important;
             box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;
+            font-size: 13px !important;
         }
         
+        /* Ajustar celdas de las tablas para que ocupen menos espacio vertical */
+        td, th {
+            padding: 4px 8px !important;
+        }
+
         /* Contenedores de elementos y cajas estilo 3D */
         div.stExpander, div.stForm {
             background: rgba(255, 255, 255, 0.08);
@@ -138,7 +144,7 @@ with col_titulo:
 
 st.markdown("---")
 
-# 1. Inicializar la lista de equipos en el session_state con los nuevos equipos
+# 1. Inicializar la lista de equipos en el session_state con los 16 equipos
 if "equipos_lista" not in st.session_state:
     st.session_state.equipos_lista = [
         "REAL SOCIEDAD",
@@ -159,7 +165,7 @@ if "equipos_lista" not in st.session_state:
         "LOS FELIX",
     ]
 
-# 2. Inicializar los datos de los partidos (Jornada 1 de ejemplo con los nuevos equipos)
+# 2. Inicializar los datos de los partidos
 if "df_partidos" not in st.session_state:
     st.session_state.df_partidos = pd.DataFrame({
         "Jornada": [1, 1, 1, 1, 1, 1, 1, 1],
@@ -210,7 +216,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "⚙️ Administrar Torneo",
 ])
 
-# Pestaña 1: Tabla de Posiciones calculada automáticamente
+# Pestaña 1: Tabla de Posiciones calculada automáticamente (Altura calculada para mostrar los 16 equipos sin scroll)
 with tab1:
     st.subheader("🌟 Clasificación General del Torneo")
 
@@ -266,7 +272,8 @@ with tab1:
     ).reset_index(drop=True)
     df_tabla.index = df_tabla.index + 1
 
-    st.dataframe(df_tabla, use_container_width=True)
+    # Altura exacta calculada para los 16 equipos (aprox 35px por fila + cabecera) para evitar scroll interno
+    st.dataframe(df_tabla, use_container_width=True, height=600)
 
 # Pestaña 2: Calendario, Resultados e Imágenes por Jornada
 with tab2:
@@ -567,4 +574,3 @@ with tab4:
             "🔒 Por favor, ingresa la contraseña para desbloquear el panel de"
             " administración."
         )
-
