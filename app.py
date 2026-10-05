@@ -132,7 +132,8 @@ st.markdown(
         div.stTabs [aria-selected="true"] * { color: #3A0CA3 !important; }
         .dataframe { background-color: rgba(255, 255, 255, 0.95) !important; color: #1a1a1a !important; border-radius: 12px !important; }
         div.stExpander, div.stForm { background: rgba(255, 255, 255, 0.08); border-radius: 12px; border: 1px solid rgba(255, 209, 0, 0.3); }
-        div.stButton > button:first-child { background: linear-gradient(135deg, #FFD100 0%, #f4b400 100%); color: #3A0CA3; font-weight: 900; border-radius: 10px; }
+        div.stButton > button:first-child { background: linear-gradient(135deg, #FFD100 0%, #f4b400 100%) !important; color: #3A0CA3 !important; font-weight: 900 !important; border-radius: 10px !important; border: none !important; }
+        div.stButton > button:first-child:hover { background: linear-gradient(135deg, #ffdc33 0%, #ffc107 100%) !important; color: #240046 !important; }
     </style>
 """,
     unsafe_allow_html=True,
@@ -147,7 +148,7 @@ with col_logo:
     st.markdown("🏟️", unsafe_allow_html=True)
 with col_titulo:
   st.title("🏆 Torneo de Fútbol - CRIT SONORA")
-  st.markdown("⚽ *Seguimiento en tiempo real (Modo Local).*")
+  st.markdown("⚽ *Seguimiento en tiempo real.*")
 
 st.markdown("---")
 
@@ -282,7 +283,7 @@ with tab4:
               equipos_lista.append(nuevo_eq)
               df_eq_new = pd.DataFrame({"Equipo": equipos_lista})
               guardar_local(FILE_EQUIPOS, df_eq_new)
-              st.success(f"✅ ¡Equipo '{nuevo_eq}' agregado localmente!")
+              st.success(f"✅ ¡Equipo '{nuevo_eq}' agregado con éxito!")
               st.rerun()
             else:
               st.warning("⚠️ El nombre está vacío o ya existe.")
@@ -302,110 +303,4 @@ with tab4:
                   FILE_EQUIPOS, pd.DataFrame({"Equipo": equipos_lista})
               )
 
-              df["Local"] = df["Local"].replace(eq_a_mod, nuevo_nombre_eq)
-              df["Visita"] = df["Visita"].replace(eq_a_mod, nuevo_nombre_eq)
-              guardar_local(FILE_PARTIDOS, df)
-
-              if not df_gols.empty:
-                df_gols["Equipo"] = df_gols["Equipo"].replace(
-                    eq_a_mod, nuevo_nombre_eq
-                )
-                guardar_local(FILE_GOLEADORES, df_gols)
-
-              st.success("✅ ¡Actualizado localmente con éxito!")
-              st.rerun()
-
-    elif admin_opcion == "Actualizar Resultados":
-      with st.form("form_resultado"):
-        partido_idx = st.selectbox(
-            "Selecciona el partido a actualizar:",
-            df.index,
-            format_func=lambda i: f"J{df.loc[i, 'Jornada']}: {df.loc[i, 'Local']} vs {df.loc[i, 'Visita']}",
-        )
-        nuevo_g_loc = st.number_input(
-            "Goles Local",
-            min_value=0,
-            step=1,
-            value=int(df.loc[partido_idx, "Goles Local"]),
-        )
-        nuevo_g_vis = st.number_input(
-            "Goles Visita",
-            min_value=0,
-            step=1,
-            value=int(df.loc[partido_idx, "Goles Visita"]),
-        )
-        marcar_jugado = st.checkbox(
-            "¿Partido Jugado?", value=bool(df.loc[partido_idx, "Jugado"])
-        )
-
-        submitted = st.form_submit_button("Guardar Resultado")
-        if submitted:
-          df.loc[partido_idx, "Goles Local"] = nuevo_g_loc
-          df.loc[partido_idx, "Goles Visita"] = nuevo_g_vis
-          df.loc[partido_idx, "Jugado"] = marcar_jugado
-          guardar_local(FILE_PARTIDOS, df)
-          st.success("✅ ¡Resultado guardado localmente!")
-          st.rerun()
-
-    elif admin_opcion == "Actualizar o Agregar Goleadores":
-      with st.form("form_goleador"):
-        lista_opciones = ["+ Agregar Nuevo Jugador"]
-        if not df_gols.empty:
-          lista_opciones = df_gols["Jugador"].tolist() + [
-              "+ Agregar Nuevo Jugador"
-          ]
-
-        jugador_sel = st.selectbox("Selecciona o registra jugador:", lista_opciones)
-
-        if jugador_sel == "+ Agregar Nuevo Jugador":
-          nuevo_jugador = st.text_input("Nombre del Nuevo Jugador")
-          nuevo_equipo = st.selectbox("Equipo del Jugador", equipos_lista)
-          nuevos_goles = st.number_input(
-              "Goles Totales", min_value=0, step=1, value=1
-          )
-          add_g = st.form_submit_button("Registrar Nuevo Goleador")
-          if add_g and nuevo_jugador:
-            nueva_fila = pd.DataFrame({
-                "Jugador": [nuevo_jugador],
-                "Equipo": [nuevo_equipo],
-                "Goles": [nuevos_goles],
-            })
-            st.session_state.df_goleadores = pd.concat(
-                [df_gols, nueva_fila], ignore_index=True
-            )
-            guardar_local(FILE_GOLEADORES, st.session_state.df_goleadores)
-            st.success("✅ ¡Goleador registrado localmente!")
-            st.rerun()
-        else:
-          idx_g = df_gols[df_gols["Jugador"] == jugador_sel].index[0]
-          goles_actuales = int(df_gols.loc[idx_g, "Goles"])
-          actualizar_goles = st.number_input(
-              "Actualizar Goles", min_value=0, step=1, value=goles_actuales
-          )
-          up_g = st.form_submit_button("Actualizar Goles del Jugador")
-          if up_g:
-            df_gols.loc[idx_g, "Goles"] = actualizar_goles
-            guardar_local(FILE_GOLEADORES, df_gols)
-            st.success("✅ ¡Goles actualizados localmente!")
-            st.rerun()
-
-    elif admin_opcion == "🗑️ Eliminar Goleadores":
-      with st.form("form_eliminar_goleador"):
-        if df_gols.empty:
-          st.info("No hay goleadores registrados.")
-          st.form_submit_button("Sin registros")
-        else:
-          jugador_a_eliminar = st.selectbox(
-              "Selecciona el jugador a eliminar:", df_gols["Jugador"].tolist()
-          )
-          btn_del_g = st.form_submit_button("Eliminar Goleador")
-          if btn_del_g:
-            st.session_state.df_goleadores = df_gols[
-                df_gols["Jugador"] != jugador_a_eliminar
-            ].reset_index(drop=True)
-            guardar_local(FILE_GOLEADORES, st.session_state.df_goleadores)
-            st.success("✅ ¡Goleador eliminado!")
-            st.rerun()
-
-  elif pwd_ingresada != "":
-    st.error("❌ Contraseña incorrecta.")
+              df["Local"] = df["Local"].replace(eq_a_mod, nuevo
