@@ -350,34 +350,50 @@ with tab4:
 
     elif admin_opcion == "Actualizar Resultados":
       with st.form("form_resultado"):
-        # Asegurar índice continuo 0..N-1
         df_reset = df.reset_index(drop=True)
-        partido_idx = st.selectbox(
-            "Selecciona el partido a actualizar:",
-            df_reset.index,
-            format_func=lambda i: f"J{df_reset.loc[i, 'Jornada']}: {df_reset.loc[i, 'Local']} vs {df_reset.loc[i, 'Visita']}",
+
+        # Crear identificador único basado en texto para evitar KeyError de índices
+        df_reset["Partido_ID"] = (
+            "J"
+            + df_reset["Jornada"].astype(str)
+            + ": "
+            + df_reset["Local"]
+            + " vs "
+            + df_reset["Visita"]
         )
+
+        partido_sel = st.selectbox(
+            "Selecciona el partido a actualizar:",
+            df_reset["Partido_ID"].tolist(),
+        )
+
+        # Obtener los datos de la fila de manera segura
+        fila_partido = df_reset[df_reset["Partido_ID"] == partido_sel].iloc[0]
+        partido_idx = fila_partido.name
+
         nuevo_g_loc = st.number_input(
             "Goles Local",
             min_value=0,
             step=1,
-            value=int(df_reset.loc[partido_idx, "Goles Local"]),
+            value=int(fila_partido["Goles Local"]),
         )
         nuevo_g_vis = st.number_input(
             "Goles Visita",
             min_value=0,
             step=1,
-            value=int(df_reset.loc[partido_idx, "Goles Visita"]),
+            value=int(fila_partido["Goles Visita"]),
         )
         marcar_jugado = st.checkbox(
-            "¿Partido Jugado?", value=bool(df_reset.loc[partido_idx, "Jugado"])
+            "¿Partido Jugado?", value=bool(fila_partido["Jugado"])
         )
 
         submitted = st.form_submit_button("Guardar Resultado")
         if submitted:
+          df_reset = df_reset.drop(columns=["Partido_ID"])
           df_reset.loc[partido_idx, "Goles Local"] = nuevo_g_loc
           df_reset.loc[partido_idx, "Goles Visita"] = nuevo_g_vis
           df_reset.loc[partido_idx, "Jugado"] = marcar_jugado
+
           df_clean = df_reset.reset_index(drop=True)
           st.session_state.df_partidos = df_clean
           guardar_local(FILE_PARTIDOS, df_clean)
