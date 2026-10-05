@@ -31,13 +31,10 @@ def cargar_o_crear_local(path_archivo, df_default):
     """Carga el archivo CSV local si existe; si no, usa el default y lo guarda."""
     if os.path.exists(path_archivo):
         try:
-            # Forzar la lectura de columnas clave como texto para evitar errores de tipo
+            # Forzar la lectura de columnas clave como texto para soportar jornadas y fases personalizadas
             df = pd.read_csv(
                 path_archivo, dtype={"Jornada": str, "Local": str, "Visita": str}
             )
-            # Mantener la columna Jornada como string para aceptar fechas o fases (ej. "6 de Octubre", "Cuartos de Final")
-            if "Jornada" in df.columns:
-                df["Jornada"] = df["Jornada"].fillna("Jornada 1").astype(str)
             return df.reset_index(drop=True)
         except Exception:
             pass
@@ -76,10 +73,10 @@ def cargar_datos():
             "6 de Octubre",
             "6 de Octubre",
             "6 de Octubre",
-            "6 de Octubre",
-            "6 de Octubre",
-            "6 de Octubre",
-            "6 de Octubre",
+            "7 de Octubre",
+            "7 de Octubre",
+            "7 de Octubre",
+            "7 de Octubre",
         ],
         "Local": [
             "REAL SOCIEDAD",
@@ -191,7 +188,7 @@ with tab1:
         loc, vis = str(row["Local"]), str(row["Visita"])
         try:
             g_loc, g_vis = int(row["Goles Local"]), int(row["Goles Visita"])
-        except ValueError:
+        except:
             continue
 
         if loc in stats:
@@ -232,23 +229,26 @@ with tab1:
 
 # Pestaña 2: Calendario y Resultados
 with tab2:
-    st.subheader("📅 Calendario y Resultados por Jornada o Fase")
-    jornadas_disponibles = sorted(df["Jornada"].unique().tolist())
-    jornada_sel = st.selectbox(
-        "Selecciona la Jornada o Fase:", jornadas_disponibles
-    )
-    df_jornada = df[df["Jornada"] == jornada_sel]
-    st.dataframe(
-        df_jornada[[
-            "Jornada",
-            "Local",
-            "Goles Local",
-            "Goles Visita",
-            "Visita",
-            "Jugado",
-        ]],
-        use_container_width=True,
-    )
+    st.subheader("📅 Calendario y Resultados por Jornada / Fase")
+    if df.empty:
+        st.info("ℹ️ No hay encuentros programados.")
+    else:
+        jornadas_disponibles = df["Jornada"].dropna().unique().tolist()
+        jornada_sel = st.selectbox(
+            "Selecciona la Jornada o Fase:", jornadas_disponibles
+        )
+        df_jornada = df[df["Jornada"] == jornada_sel]
+        st.dataframe(
+            df_jornada[[
+                "Jornada",
+                "Local",
+                "Goles Local",
+                "Goles Visita",
+                "Visita",
+                "Jugado",
+            ]],
+            use_container_width=True,
+        )
 
 # Pestaña 3: Tabla de Goleadores
 with tab3:
@@ -276,8 +276,8 @@ with tab4:
             "¿Qué deseas realizar?",
             [
                 "🏟️ Administrar Equipos (Agregar / Modificar / Eliminar)",
-                "📅 Agregar Partido (Jornadas, Cuartos, Semifinal, Final)",
-                "Actualizar Resultados",
+                "⚽ Administrar Partidos (Agregar / Editar / Eliminar)",
+                "Actualizar Resultados de Partidos",
                 "Actualizar o Agregar Goleadores",
                 "🗑️ Eliminar Goleadores",
             ],
@@ -300,7 +300,7 @@ with tab4:
                             df_eq_new = pd.DataFrame({"Equipo": equipos_lista})
                             guardar_local(FILE_EQUIPOS, df_eq_new)
                             st.success(
-                                f"✅ ¡Equipo '{nuevo_eq}' agregado con éxito y guardado correctamente!"
+                                f"✅ ¡Equipo '{nuevo_eq}' agregado con éxito!"
                             )
                             st.rerun()
                         else:
@@ -337,7 +337,7 @@ with tab4:
                                 guardar_local(FILE_GOLEADORES, df_gols_clean)
 
                             st.success(
-                                f"✅ ¡Equipo '{eq_a_mod}' renombrado a '{nuevo_nombre_eq}' con éxito!"
+                                f"✅ ¡Equipo '{eq_a_mod}' renombrado a '{nuevo_nombre_eq}'!"
                             )
                             st.rerun()
                         else:
@@ -362,93 +362,158 @@ with tab4:
                             guardar_local(FILE_PARTIDOS, df_filtrado)
 
                             st.success(
-                                f"✅ ¡Equipo '{eq_a_del}' eliminado con éxito del torneo!"
+                                f"✅ ¡Equipo '{eq_a_del}' eliminado del torneo!"
                             )
                             st.rerun()
 
-        elif admin_opcion == "📅 Agregar Partido (Jornadas, Cuartos, Semifinal, Final)":
-            with st.form("form_agregar_partido"):
-                st.markdown("### Programar Nuevo Encuentro")
-                tipo_jornada = st.selectbox(
-                    "Tipo de Jornada / Fecha / Fase:",
-                    ["6 de Octubre", "7 de Octubre", "Cuartos de Final", "Semifinal", "Final", "Otra Fecha / Jornada Personalizada"]
-                )
-                jornada_custom = ""
-                if tipo_jornada == "Otra Fecha / Jornada Personalizada":
-                    jornada_custom = st.text_input("Escribe el nombre de la jornada o fecha (ej. 8 de Octubre):")
-                
-                equipo_local = st.selectbox("Equipo Local", equipos_lista, key="local_add")
-                equipo_visita = st.selectbox("Equipo Visita", equipos_lista, key="visita_add")
-                
-                btn_crear_partido = st.form_submit_button("Agregar Partido al Calendario")
-                if btn_crear_partido:
-                    nombre_jornada_final = jornada_custom if tipo_jornada == "Otra Fecha / Jornada Personalizada" else tipo_jornada
-                    if equipo_local == equipo_visita:
-                        st.warning("⚠️ El equipo local y visitante no pueden ser el mismo.")
-                    elif not nombre_jornada_final.strip():
-                        st.warning("⚠️️ Especifica un nombre válido para la jornada/fase.")
-                    else:
-                        nueva_fila_partido = pd.DataFrame({
-                            "Jornada": [nombre_jornada_final],
-                            "Local": [equipo_local],
-                            "Goles Local": [0],
-                            "Goles Visita": [0],
-                            "Visita": [equipo_visita],
-                            "Jugado": [False],
-                        })
-                        df_partidos_actualizado = pd.concat([df, nueva_fila_partido], ignore_index=True).reset_index(drop=True)
-                        st.session_state.df_partidos = df_partidos_actualizado
-                        guardar_local(FILE_PARTIDOS, df_partidos_actualizado)
-                        st.success(f"✅ ¡Partido agregado con éxito en '{nombre_jornada_final}'!")
-                        st.rerun()
+        elif admin_opcion == "⚽ Administrar Partidos (Agregar / Editar / Eliminar)":
+            sub_partido_op = st.selectbox(
+                "Selecciona la acción para partidos:",
+                ["Agregar Nuevo Partido", "Editar Partido Existente", "Eliminar Partido"],
+            )
 
-        elif admin_opcion == "Actualizar Resultados":
+            if sub_partido_op == "Agregar Nuevo Partido":
+                with st.form("form_add_partido"):
+                    st.markdown("### Programa un nuevo encuentro")
+                    nueva_jornada = st.text_input(
+                        "Jornada o Fase (ej. '6 de Octubre', 'Cuartos de Final', 'Semifinal', 'Final')"
+                    )
+                    col_l, col_v = st.columns(2)
+                    with col_l:
+                         equipo_local = st.selectbox("Equipo Local", equipos_lista, key="add_loc")
+                    with col_v:
+                         equipo_visita = st.selectbox("Equipo Visita", equipos_lista, key="add_vis")
+                    
+                    btn_crear_partido = st.form_submit_button("Guardar Nuevo Partido")
+                    if btn_crear_partido:
+                        if nueva_jornada and equipo_local != equipo_visita:
+                            nueva_fila = pd.DataFrame({
+                                "Jornada": [nueva_jornada],
+                                "Local": [equipo_local],
+                                "Goles Local": [0],
+                                "Goles Visita": [0],
+                                "Visita": [equipo_visita],
+                                "Jugado": [False]
+                            })
+                            df_updated = pd.concat([df, nueva_fila], ignore_index=True)
+                            st.session_state.df_partidos = df_updated
+                            guardar_local(FILE_PARTIDOS, df_updated)
+                            st.success("✅ ¡Partido agregado con éxito!")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Asegúrate de escribir la jornada/fase y que el local y visita sean distintos.")
+
+            elif sub_partido_op == "Editar Partido Existente":
+                if df.empty:
+                    st.info("No hay partidos registrados para editar.")
+                else:
+                    with st.form("form_edit_partido"):
+                        df_edit = df.reset_index(drop=True)
+                        partidos_ids = [
+                            f"[{row['Jornada']}] {row['Local']} vs {row['Visita']} (Idx: {idx})"
+                            for idx, row in df_edit.iterrows()
+                        ]
+                        partido_elegido = st.selectbox("Selecciona el partido a editar:", partidos_ids)
+                        idx_sel = int(partido_elegido.split("(Idx: ")[1].replace(")", ""))
+
+                        row_actual = df_edit.loc[idx_sel]
+                        nueva_j = st.text_input("Jornada o Fase", value=str(row_actual["Jornada"]))
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            nuevo_l = st.selectbox("Local", equipos_lista, index=equipos_lista.index(row_actual["Local"]) if row_actual["Local"] in equipos_lista else 0, key="edit_l")
+                            g_l = st.number_input("Goles Local", min_value=0, step=1, value=int(row_actual["Goles Local"]))
+                        with col2:
+                            nuevo_v = st.selectbox("Visita", equipos_lista, index=equipos_lista.index(row_actual["Visita"]) if row_actual["Visita"] in equipos_lista else 0, key="edit_v")
+                            g_v = st.number_input("Goles Visita", min_value=0, step=1, value=int(row_actual["Goles Visita"]))
+                        
+                        jugado_val = st.checkbox("¿Jugado?", value=bool(row_actual["Jugado"]))
+
+                        btn_guardar_edit = st.form_submit_button("Actualizar Partido")
+                        if btn_guardar_edit:
+                            df_edit.loc[idx_sel, "Jornada"] = nueva_j
+                            df_edit.loc[idx_sel, "Local"] = nuevo_l
+                            df_edit.loc[idx_sel, "Visita"] = nuevo_v
+                            df_edit.loc[idx_sel, "Goles Local"] = g_l
+                            df_edit.loc[idx_sel, "Goles Visita"] = g_v
+                            df_edit.loc[idx_sel, "Jugado"] = jugado_val
+
+                            st.session_state.df_partidos = df_edit
+                            guardar_local(FILE_PARTIDOS, df_edit)
+                            st.success("✅ ¡Partido actualizado correctamente!")
+                            st.rerun()
+
+            elif sub_partido_op == "Eliminar Partido":
+                if df.empty:
+                    st.info("No hay partidos para eliminar.")
+                else:
+                    with st.form("form_del_partido"):
+                        df_del = df.reset_index(drop=True)
+                        partidos_ids_del = [
+                            f"[{row['Jornada']}] {row['Local']} vs {row['Visita']} (Idx: {idx})"
+                            for idx, row in df_del.iterrows()
+                        ]
+                        partido_a_borrar = st.selectbox("Selecciona el partido a eliminar:", partidos_ids_del)
+                        idx_del = int(partido_a_borrar.split("(Idx: ")[1].replace(")", ""))
+
+                        btn_confirmar_del = st.form_submit_button("Eliminar Partido Seleccionado")
+                        if btn_confirmar_del:
+                            df_final_del = df_del.drop(idx_del).reset_index(drop=True)
+                            st.session_state.df_partidos = df_final_del
+                            guardar_local(FILE_PARTIDOS, df_final_del)
+                            st.success("🗑️ ¡Partido eliminado con éxito!")
+                            st.rerun()
+
+        elif admin_opcion == "Actualizar Resultados de Partidos":
             with st.form("form_resultado"):
                 df_reset = df.reset_index(drop=True)
+                if df_reset.empty:
+                    st.info("No hay partidos registrados.")
+                    st.form_submit_button("Sin partidos")
+                else:
+                    lista_partidos_ids = []
+                    for idx, row in df_reset.iterrows():
+                        p_id = f"[{str(row['Jornada'])}]: {str(row['Local'])} vs {str(row['Visita'])}"
+                        lista_partidos_ids.append(p_id)
+                    
+                    df_reset["Partido_ID"] = lista_partidos_ids
 
-                lista_partidos_ids = []
-                for idx, row in df_reset.iterrows():
-                    p_id = f"[{str(row['Jornada'])}] {str(row['Local'])} vs {str(row['Visita'])}"
-                    lista_partidos_ids.append(p_id)
-                
-                df_reset["Partido_ID"] = lista_partidos_ids
+                    partido_sel = st.selectbox(
+                        "Selecciona el partido a actualizar:",
+                        df_reset["Partido_ID"].tolist(),
+                    )
 
-                partido_sel = st.selectbox(
-                    "Selecciona el partido a actualizar:",
-                    df_reset["Partido_ID"].tolist(),
-                )
+                    fila_partido = df_reset[df_reset["Partido_ID"] == partido_sel].iloc[0]
+                    partido_idx = fila_partido.name
 
-                fila_partido = df_reset[df_reset["Partido_ID"] == partido_sel].iloc[0]
-                partido_idx = fila_partido.name
+                    nuevo_g_loc = st.number_input(
+                        "Goles Local",
+                        min_value=0,
+                        step=1,
+                        value=int(fila_partido["Goles Local"]),
+                    )
+                    nuevo_g_vis = st.number_input(
+                        "Goles Visita",
+                        min_value=0,
+                        step=1,
+                        value=int(fila_partido["Goles Visita"]),
+                    )
+                    marcar_jugado = st.checkbox(
+                        "¿Partido Jugado?", value=bool(fila_partido["Jugado"])
+                    )
 
-                nuevo_g_loc = st.number_input(
-                    "Goles Local",
-                    min_value=0,
-                    step=1,
-                    value=int(fila_partido["Goles Local"]),
-                )
-                nuevo_g_vis = st.number_input(
-                    "Goles Visita",
-                    min_value=0,
-                    step=1,
-                    value=int(fila_partido["Goles Visita"]),
-                )
-                marcar_jugado = st.checkbox(
-                    "¿Partido Jugado?", value=bool(fila_partido["Jugado"])
-                )
+                    submitted = st.form_submit_button("Guardar Resultado")
+                    if submitted:
+                        df_reset = df_reset.drop(columns=["Partido_ID"])
+                        df_reset.loc[partido_idx, "Goles Local"] = nuevo_g_loc
+                        df_reset.loc[partido_idx, "Goles Visita"] = nuevo_g_vis
+                        df_reset.loc[partido_idx, "Jugado"] = marcar_jugado
 
-                submitted = st.form_submit_button("Guardar Resultado")
-                if submitted:
-                    df_reset = df_reset.drop(columns=["Partido_ID"])
-                    df_reset.loc[partido_idx, "Goles Local"] = nuevo_g_loc
-                    df_reset.loc[partido_idx, "Goles Visita"] = nuevo_g_vis
-                    df_reset.loc[partido_idx, "Jugado"] = marcar_jugado
-
-                    df_clean = df_reset.reset_index(drop=True)
-                    st.session_state.df_partidos = df_clean
-                    guardar_local(FILE_PARTIDOS, df_clean)
-                    st.success("✅ ¡Resultado guardado correctamente con éxito!")
-                    st.rerun()
+                        df_clean = df_reset.reset_index(drop=True)
+                        st.session_state.df_partidos = df_clean
+                        guardar_local(FILE_PARTIDOS, df_clean)
+                        st.success("✅ ¡Resultado guardado con éxito!")
+                        st.rerun()
 
         elif admin_opcion == "Actualizar o Agregar Goleadores":
             with st.form("form_goleador"):
