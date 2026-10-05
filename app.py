@@ -17,6 +17,7 @@ def guardar_local(path_archivo, df_o_contenido):
   """Guarda un archivo CSV localmente."""
   try:
     if isinstance(df_o_contenido, pd.DataFrame):
+      # Asegurar que se guarden sin índices raros desordenados
       df_o_contenido.to_csv(path_archivo, index=False)
     else:
       with open(path_archivo, "w", encoding="utf-8") as f:
@@ -31,7 +32,8 @@ def cargar_o_crear_local(path_archivo, df_default):
   """Carga el archivo CSV local si existe; si no, usa el default y lo guarda."""
   if os.path.exists(path_archivo):
     try:
-      return pd.read_csv(path_archivo)
+      df = pd.read_csv(path_archivo)
+      return df
     except Exception:
       pass
   guardar_local(path_archivo, df_default)
@@ -90,9 +92,12 @@ def cargar_datos():
       "Jugado": [False, False, False, False, False, False, False, False],
   })
   df_part = cargar_o_crear_local(FILE_PARTIDOS, df_part_default)
+  # Asegurar índices limpios
+  df_part = df_part.reset_index(drop=True)
 
   df_gol_default = pd.DataFrame(columns=["Jugador", "Equipo", "Goles"])
   df_gol = cargar_o_crear_local(FILE_GOLEADORES, df_gol_default)
+  df_gol = df_gol.reset_index(drop=True)
 
   return equipos_lista, df_part, df_gol
 
@@ -107,8 +112,8 @@ if "datos_cargados" not in st.session_state:
   st.session_state.datos_cargados = True
 
 equipos_lista = st.session_state.equipos_lista
-df = st.session_state.df_partidos
-df_gols = st.session_state.df_goleadores
+df = st.session_state.df_partidos.reset_index(drop=True)
+df_gols = st.session_state.df_goleadores.reset_index(drop=True)
 
 # --- ESTILOS CSS PERSONALIZADOS ---
 st.markdown(
@@ -304,13 +309,17 @@ with tab4:
 
               df["Local"] = df["Local"].replace(eq_a_mod, nuevo_nombre_eq)
               df["Visita"] = df["Visita"].replace(eq_a_mod, nuevo_nombre_eq)
-              guardar_local(FILE_PARTIDOS, df)
+              df_clean = df.reset_index(drop=True)
+              st.session_state.df_partidos = df_clean
+              guardar_local(FILE_PARTIDOS, df_clean)
 
               if not df_gols.empty:
                 df_gols["Equipo"] = df_gols["Equipo"].replace(
                     eq_a_mod, nuevo_nombre_eq
                 )
-                guardar_local(FILE_GOLEADORES, df_gols)
+                df_gols_clean = df_gols.reset_index(drop=True)
+                st.session_state.df_goleadores = df_gols_clean
+                guardar_local(FILE_GOLEADORES, df_gols_clean)
 
               st.success(
                   f"✅ ¡Equipo '{eq_a_mod}' renombrado a '{nuevo_nombre_eq}' con"
@@ -332,8 +341,6 @@ with tab4:
                   FILE_EQUIPOS, pd.DataFrame({"Equipo": equipos_lista})
               )
 
-              # Opcional: Eliminar partidos donde participaba o dejarlos vacíos/marcar advertencia
-              # Aquí removemos del registro general los partidos donde participaba el equipo eliminado
               df_filtrado = df[
                   (df["Local"] != eq_a_del) & (df["Visita"] != eq_a_del)
               ].reset_index(drop=True)
@@ -373,7 +380,9 @@ with tab4:
           df.loc[partido_idx, "Goles Local"] = nuevo_g_loc
           df.loc[partido_idx, "Goles Visita"] = nuevo_g_vis
           df.loc[partido_idx, "Jugado"] = marcar_jugado
-          guardar_local(FILE_PARTIDOS, df)
+          df_clean = df.reset_index(drop=True)
+          st.session_state.df_partidos = df_clean
+          guardar_local(FILE_PARTIDOS, df_clean)
           st.success("✅ ¡Resultado guardado correctamente con éxito!")
           st.rerun()
 
@@ -400,10 +409,11 @@ with tab4:
                 "Equipo": [nuevo_equipo],
                 "Goles": [nuevos_goles],
             })
-            st.session_state.df_goleadores = pd.concat(
+            df_gols_updated = pd.concat(
                 [df_gols, nueva_fila], ignore_index=True
-            )
-            guardar_local(FILE_GOLEADORES, st.session_state.df_goleadores)
+            ).reset_index(drop=True)
+            st.session_state.df_goleadores = df_gols_updated
+            guardar_local(FILE_GOLEADORES, df_gols_updated)
             st.success(
                 f"✅ ¡Goleador '{nuevo_jugador}' registrado con éxito!"
             )
@@ -417,7 +427,9 @@ with tab4:
           up_g = st.form_submit_button("Actualizar Goles del Jugador")
           if up_g:
             df_gols.loc[idx_g, "Goles"] = actualizar_goles
-            guardar_local(FILE_GOLEADORES, df_gols)
+            df_gols_clean = df_gols.reset_index(drop=True)
+            st.session_state.df_goleadores = df_gols_clean
+            guardar_local(FILE_GOLEADORES, df_gols_clean)
             st.success("✅ ¡Goles actualizados con éxito!")
             st.rerun()
 
@@ -432,10 +444,11 @@ with tab4:
           )
           btn_del_g = st.form_submit_button("Eliminar Goleador")
           if btn_del_g:
-            st.session_state.df_goleadores = df_gols[
+            df_gols_clean = df_gols[
                 df_gols["Jugador"] != jugador_a_eliminar
             ].reset_index(drop=True)
-            guardar_local(FILE_GOLEADORES, st.session_state.df_goleadores)
+            st.session_state.df_goleadores = df_gols_clean
+            guardar_local(FILE_GOLEADORES, df_gols_clean)
             st.success("✅ ¡Goleador eliminado con éxito!")
             st.rerun()
 
