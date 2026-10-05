@@ -17,7 +17,6 @@ def guardar_local(path_archivo, df_o_contenido):
   """Guarda un archivo CSV localmente."""
   try:
     if isinstance(df_o_contenido, pd.DataFrame):
-      # Asegurar que se guarden sin índices raros desordenados
       df_o_contenido.to_csv(path_archivo, index=False)
     else:
       with open(path_archivo, "w", encoding="utf-8") as f:
@@ -33,11 +32,11 @@ def cargar_o_crear_local(path_archivo, df_default):
   if os.path.exists(path_archivo):
     try:
       df = pd.read_csv(path_archivo)
-      return df
+      return df.reset_index(drop=True)
     except Exception:
       pass
   guardar_local(path_archivo, df_default)
-  return df_default
+  return df_default.reset_index(drop=True)
 
 
 # Funciones para cargar datos iniciales locales
@@ -92,12 +91,9 @@ def cargar_datos():
       "Jugado": [False, False, False, False, False, False, False, False],
   })
   df_part = cargar_o_crear_local(FILE_PARTIDOS, df_part_default)
-  # Asegurar índices limpios
-  df_part = df_part.reset_index(drop=True)
 
   df_gol_default = pd.DataFrame(columns=["Jugador", "Equipo", "Goles"])
   df_gol = cargar_o_crear_local(FILE_GOLEADORES, df_gol_default)
-  df_gol = df_gol.reset_index(drop=True)
 
   return equipos_lista, df_part, df_gol
 
@@ -354,33 +350,35 @@ with tab4:
 
     elif admin_opcion == "Actualizar Resultados":
       with st.form("form_resultado"):
+        # Asegurar índice continuo 0..N-1
+        df_reset = df.reset_index(drop=True)
         partido_idx = st.selectbox(
             "Selecciona el partido a actualizar:",
-            df.index,
-            format_func=lambda i: f"J{df.loc[i, 'Jornada']}: {df.loc[i, 'Local']} vs {df.loc[i, 'Visita']}",
+            df_reset.index,
+            format_func=lambda i: f"J{df_reset.loc[i, 'Jornada']}: {df_reset.loc[i, 'Local']} vs {df_reset.loc[i, 'Visita']}",
         )
         nuevo_g_loc = st.number_input(
             "Goles Local",
             min_value=0,
             step=1,
-            value=int(df.loc[partido_idx, "Goles Local"]),
+            value=int(df_reset.loc[partido_idx, "Goles Local"]),
         )
         nuevo_g_vis = st.number_input(
             "Goles Visita",
             min_value=0,
             step=1,
-            value=int(df.loc[partido_idx, "Goles Visita"]),
+            value=int(df_reset.loc[partido_idx, "Goles Visita"]),
         )
         marcar_jugado = st.checkbox(
-            "¿Partido Jugado?", value=bool(df.loc[partido_idx, "Jugado"])
+            "¿Partido Jugado?", value=bool(df_reset.loc[partido_idx, "Jugado"])
         )
 
         submitted = st.form_submit_button("Guardar Resultado")
         if submitted:
-          df.loc[partido_idx, "Goles Local"] = nuevo_g_loc
-          df.loc[partido_idx, "Goles Visita"] = nuevo_g_vis
-          df.loc[partido_idx, "Jugado"] = marcar_jugado
-          df_clean = df.reset_index(drop=True)
+          df_reset.loc[partido_idx, "Goles Local"] = nuevo_g_loc
+          df_reset.loc[partido_idx, "Goles Visita"] = nuevo_g_vis
+          df_reset.loc[partido_idx, "Jugado"] = marcar_jugado
+          df_clean = df_reset.reset_index(drop=True)
           st.session_state.df_partidos = df_clean
           guardar_local(FILE_PARTIDOS, df_clean)
           st.success("✅ ¡Resultado guardado correctamente con éxito!")
@@ -389,8 +387,9 @@ with tab4:
     elif admin_opcion == "Actualizar o Agregar Goleadores":
       with st.form("form_goleador"):
         lista_opciones = ["+ Agregar Nuevo Jugador"]
-        if not df_gols.empty:
-          lista_opciones = df_gols["Jugador"].tolist() + [
+        df_gols_reset = df_gols.reset_index(drop=True)
+        if not df_gols_reset.empty:
+          lista_opciones = df_gols_reset["Jugador"].tolist() + [
               "+ Agregar Nuevo Jugador"
           ]
 
@@ -410,7 +409,7 @@ with tab4:
                 "Goles": [nuevos_goles],
             })
             df_gols_updated = pd.concat(
-                [df_gols, nueva_fila], ignore_index=True
+                [df_gols_reset, nueva_fila], ignore_index=True
             ).reset_index(drop=True)
             st.session_state.df_goleadores = df_gols_updated
             guardar_local(FILE_GOLEADORES, df_gols_updated)
@@ -419,15 +418,17 @@ with tab4:
             )
             st.rerun()
         else:
-          idx_g = df_gols[df_gols["Jugador"] == jugador_sel].index[0]
-          goles_actuales = int(df_gols.loc[idx_g, "Goles"])
+          idx_g = df_gols_reset[
+              df_gols_reset["Jugador"] == jugador_sel
+          ].index[0]
+          goles_actuales = int(df_gols_reset.loc[idx_g, "Goles"])
           actualizar_goles = st.number_input(
               "Actualizar Goles", min_value=0, step=1, value=goles_actuales
           )
           up_g = st.form_submit_button("Actualizar Goles del Jugador")
           if up_g:
-            df_gols.loc[idx_g, "Goles"] = actualizar_goles
-            df_gols_clean = df_gols.reset_index(drop=True)
+            df_gols_reset.loc[idx_g, "Goles"] = actualizar_goles
+            df_gols_clean = df_gols_reset.reset_index(drop=True)
             st.session_state.df_goleadores = df_gols_clean
             guardar_local(FILE_GOLEADORES, df_gols_clean)
             st.success("✅ ¡Goles actualizados con éxito!")
@@ -435,17 +436,19 @@ with tab4:
 
     elif admin_opcion == "🗑️ Eliminar Goleadores":
       with st.form("form_eliminar_goleador"):
-        if df_gols.empty:
+        df_gols_reset = df_gols.reset_index(drop=True)
+        if df_gols_reset.empty:
           st.info("No hay goleadores registrados.")
           st.form_submit_button("Sin registros")
         else:
           jugador_a_eliminar = st.selectbox(
-              "Selecciona el jugador a eliminar:", df_gols["Jugador"].tolist()
+              "Selecciona el jugador a eliminar:",
+              df_gols_reset["Jugador"].tolist(),
           )
           btn_del_g = st.form_submit_button("Eliminar Goleador")
           if btn_del_g:
-            df_gols_clean = df_gols[
-                df_gols["Jugador"] != jugador_a_eliminar
+            df_gols_clean = df_gols_reset[
+                df_gols_reset["Jugador"] != jugador_a_eliminar
             ].reset_index(drop=True)
             st.session_state.df_goleadores = df_gols_clean
             guardar_local(FILE_GOLEADORES, df_gols_clean)
