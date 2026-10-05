@@ -31,7 +31,13 @@ def cargar_o_crear_local(path_archivo, df_default):
   """Carga el archivo CSV local si existe; si no, usa el default y lo guarda."""
   if os.path.exists(path_archivo):
     try:
-      df = pd.read_csv(path_archivo)
+      # Forzar la lectura de columnas clave como texto para evitar errores de tipo
+      df = pd.read_csv(
+          path_archivo, dtype={"Jornada": str, "Local": str, "Visita": str}
+      )
+      # Convertir Jornada nuevamente a entero numérico de forma segura para ordenamiento
+      if "Jornada" in df.columns:
+        df["Jornada"] = pd.to_numeric(df["Jornada"], errors="coerce").fillna(1).astype(int)
       return df.reset_index(drop=True)
     except Exception:
       pass
@@ -173,7 +179,7 @@ with tab1:
   }
 
   for _, row in df[df["Jugado"] == True].iterrows():
-    loc, vis = row["Local"], row["Visita"]
+    loc, vis = str(row["Local"]), str(row["Visita"])
     g_loc, g_vis = int(row["Goles Local"]), int(row["Goles Visita"])
 
     if loc in stats:
@@ -352,22 +358,19 @@ with tab4:
       with st.form("form_resultado"):
         df_reset = df.reset_index(drop=True)
 
-        # Crear identificador único basado en texto para evitar KeyError de índices
-        df_reset["Partido_ID"] = (
-            "J"
-            + df_reset["Jornada"].astype(str)
-            + ": "
-            + df_reset["Local"]
-            + " vs "
-            + df_reset["Visita"]
-        )
+        # Construir identificador de forma segura convirtiendo explícitamente a string
+        lista_partidos_ids = []
+        for idx, row in df_reset.iterrows():
+          p_id = f"J{str(row['Jornada'])}: {str(row['Local'])} vs {str(row['Visita'])}"
+          lista_partidos_ids.append(p_id)
+        
+        df_reset["Partido_ID"] = lista_partidos_ids
 
         partido_sel = st.selectbox(
             "Selecciona el partido a actualizar:",
             df_reset["Partido_ID"].tolist(),
         )
 
-        # Obtener los datos de la fila de manera segura
         fila_partido = df_reset[df_reset["Partido_ID"] == partido_sel].iloc[0]
         partido_idx = fila_partido.name
 
