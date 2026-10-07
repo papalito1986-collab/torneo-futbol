@@ -587,4 +587,4 @@ with tab4:
                         st.rerun()
 
     elif pwd_ingresada != "":
-        st.error("❌ Contraseña incorrecta.")
+        st.error("❌ Contraseña incorrecta")
