@@ -515,55 +515,62 @@ with tab4:
                         st.success("✅ ¡Resultado guardado con éxito!")
                         st.rerun()
 
-        elif admin_opcion == "Actualizar o Agregar Goleadores":
-            with st.form("form_goleador"):
-                lista_opciones = ["+ Agregar Nuevo Jugador"]
-                df_gols_reset = df_gols.reset_index(drop=True)
-                if not df_gols_reset.empty:
-                    lista_opciones = df_gols_reset["Jugador"].tolist() + [
-                        "+ Agregar Nuevo Jugador"
-                    ]
-
-                jugador_sel = st.selectbox("Selecciona o registra jugador:", lista_opciones)
-
-                if jugador_sel == "+ Agregar Nuevo Jugador":
+      elif admin_opcion == "Actualizar o Agregar Goleadores":
+            st.markdown("### 👟 Gestión de Goleadores")
+            
+            # Usamos pestañas internas para separar el alta de la actualización
+            sub_tab_1, sub_tab_2 = st.tabs(["Registrar Nuevo Goleador", "Actualizar Goles de Jugador"])
+            
+            with sub_tab_1:
+                with st.form("form_nuevo_goleador"):
                     nuevo_jugador = st.text_input("Nombre del Nuevo Jugador")
-                    nuevo_equipo = st.selectbox("Equipo del Jugador", equipos_lista)
-                    nuevos_goles = st.number_input(
-                        "Goles Totales", min_value=0, step=1, value=1
-                    )
-                    add_g = st.form_submit_button("Registrar Nuevo Goleador")
-                    if add_g and nuevo_jugador:
-                        nueva_fila = pd.DataFrame({
-                            "Jugador": [nuevo_jugador],
-                            "Equipo": [nuevo_equipo],
-                            "Goles": [nuevos_goles],
-                        })
-                        df_gols_updated = pd.concat(
-                            [df_gols_reset, nueva_fila], ignore_index=True
-                        ).reset_index(drop=True)
-                        st.session_state.df_goleadores = df_gols_updated
-                        guardar_local(FILE_GOLEADORES, df_gols_updated)
-                        st.success(
-                            f"✅ ¡Goleador '{nuevo_jugador}' registrado con éxito!"
-                        )
-                        st.rerun()
-                else:
-                    idx_g = df_gols_reset[
-                        df_gols_reset["Jugador"] == jugador_sel
-                    ].index[0]
-                    goles_actuales = int(df_gols_reset.loc[idx_g, "Goles"])
-                    actualizar_goles = st.number_input(
-                        "Actualizar Goles", min_value=0, step=1, value=goles_actuales
-                    )
-                    up_g = st.form_submit_button("Actualizar Goles del Jugador")
-                    if up_g:
-                        df_gols_reset.loc[idx_g, "Goles"] = actualizar_goles
-                        df_gols_clean = df_gols_reset.reset_index(drop=True)
-                        st.session_state.df_goleadores = df_gols_clean
-                        guardar_local(FILE_GOLEADORES, df_gols_clean)
-                        st.success("✅ ¡Goles actualizados con éxito!")
-                        st.rerun()
+                    nuevo_equipo = st.selectbox("Equipo del Jugador", equipos_lista, key="nuevo_eq_gol")
+                    nuevos_goles = st.number_input("Goles Totales", min_value=1, step=1, value=1, key="num_goles_nuevo")
+                    btn_reg_nuevo = st.form_submit_button("Registrar Goleador")
+                    
+                    if btn_reg_nuevo:
+                        if nuevo_jugador.strip() != "":
+                            df_gols_reset = df_gols.reset_index(drop=True)
+                            
+                            # Verificar si el jugador ya existe para evitar duplicados exactos
+                            if not df_gols_reset.empty and nuevo_jugador in df_gols_reset["Jugador"].values:
+                                st.warning(f"⚠️ El jugador '{nuevo_jugador}' ya existe. Usa la pestaña de actualizar.")
+                            else:
+                                nueva_fila = pd.DataFrame({
+                                    "Jugador": [nuevo_jugador.strip()],
+                                    "Equipo": [nuevo_equipo],
+                                    "Goles": [nuevos_goles],
+                                })
+                                df_gols_updated = pd.concat([df_gols_reset, nueva_fila], ignore_index=True)
+                                st.session_state.df_goleadores = df_gols_updated
+                                guardar_local(FILE_GOLEADORES, df_gols_updated)
+                                st.success(f"✅ ¡Goleador '{nuevo_jugador}' registrado con éxito!")
+                                st.rerun()
+                        else:
+                            st.warning("⚠️ Debes ingresar el nombre del jugador.")
+
+            with sub_tab_2:
+                with st.form("form_actualizar_goleador"):
+                    df_gols_reset = df_gols.reset_index(drop=True)
+                    if df_gols_reset.empty:
+                        st.info("No hay goleadores registrados para actualizar.")
+                        st.form_submit_button("Sin registros", disabled=True)
+                    else:
+                        jugador_sel = st.selectbox("Selecciona al jugador:", df_gols_reset["Jugador"].tolist(), key="sel_jugador_act")
+                        
+                        # Obtener goles actuales del jugador seleccionado
+                        idx_g = df_gols_reset[df_gols_reset["Jugador"] == jugador_sel].index[0]
+                        goles_actuales = int(df_gols_reset.loc[idx_g, "Goles"])
+                        
+                        actualizar_goles = st.number_input("Actualizar Goles Totales", min_value=0, step=1, value=goles_actuales, key="num_goles_act")
+                        btn_up_g = st.form_submit_button("Guardar Cambios de Goles")
+                        
+                        if btn_up_g:
+                            df_gols_reset.loc[idx_g, "Goles"] = actualizar_goles
+                            st.session_state.df_goleadores = df_gols_reset
+                            guardar_local(FILE_GOLEADORES, df_gols_reset)
+                            st.success("✅ ¡Goles actualizados con éxito!")
+                            st.rerun()
 
         elif admin_opcion == "🗑️ Eliminar Goleadores":
             with st.form("form_eliminar_goleador"):
