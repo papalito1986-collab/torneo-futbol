@@ -8,18 +8,18 @@ st.set_page_config(
     page_title="Torneo de Fútbol - Teletón Sonora", page_icon="⚽", layout="wide"
 )
 
-# Nombre de la base de datos SQLite persistente
+# Nombre de la base de datos persistente
 DB_NAME = "torneo_crit.db"
 
 
 def obtener_conexion():
-    """Crea y retorna una conexión a la base de datos SQLite."""
+    """Crea y retorna una conexión a la base de datos."""
     conn = sqlite3.connect(DB_NAME)
     return conn
 
 
 def inicializar_base_datos():
-    """Crea las tablas en SQLite y carga los datos por defecto si están vacías."""
+    """Crea las tablas y asegura que los equipos estén listos en la base de datos."""
     conn = obtener_conexion()
     cursor = conn.cursor()
 
@@ -31,7 +31,7 @@ def inicializar_base_datos():
         )
     """)
 
-    # Tabla de Partidos
+    # Tabla de Partidos con ID único explícito
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS partidos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,7 +55,7 @@ def inicializar_base_datos():
     """)
     conn.commit()
 
-    # Insertar equipos iniciales si la tabla está vacía
+    # Insertar equipos iniciales si la tabla está vacía (convertidos a mayúsculas)
     cursor.execute("SELECT COUNT(*) FROM equipos")
     if cursor.fetchone()[0] == 0:
         equipos_default = [
@@ -65,7 +65,7 @@ def inicializar_base_datos():
             ("ORGULLOSAMENTE TERCOS",),
             ("CUERVOS FC - AXOMA",),
             ("CLUB GRIEGOS ISJ",),
-            ("Piratitas del Sahuaro FC",),
+            ("PIRATITAS DEL SAHUARO FC",),
             ("TELETONES",),
             ("MASTER FC JUAREZ",),
             ("ELECTRICA FLORES BRAVOS HERMOSILLO",),
@@ -77,26 +77,16 @@ def inicializar_base_datos():
             ("LOS FELIX",),
         ]
         cursor.executemany("INSERT INTO equipos (nombre) VALUES (?)", equipos_default)
+        conn.commit()
+    else:
+        # Asegurar que los existentes estén en mayúsculas por si acaso
+        cursor.execute("SELECT id, nombre FROM equipos")
+        for eq_id, nombre in cursor.fetchall():
+            nombre_upper = nombre.upper()
+            if nombre != nombre_upper:
+                cursor.execute("UPDATE equipos SET nombre = ? WHERE id = ?", (nombre_upper, eq_id))
+        conn.commit()
 
-    # Insertar partidos iniciales si la tabla está vacía
-    cursor.execute("SELECT COUNT(*) FROM partidos")
-    if cursor.fetchone()[0] == 0:
-        partidos_default = [
-            ("6 de Octubre", "REAL SOCIEDAD", 0, 0, "LOS FELIX", 0),
-            ("6 de Octubre", "LOS DEFENSORES", 0, 0, "AXOMA", 0),
-            ("6 de Octubre", "LA CARIDAD FC", 0, 0, "HOSPITAL MILITAR-SEDENA", 0),
-            ("6 de Octubre", "ORGULLOSAMENTE TERCOS", 0, 0, "ARBITROS ZONA NORTE", 0),
-            ("7 de Octubre", "CUERVOS FC - AXOMA", 0, 0, "ACADEMIA TOROS", 0),
-            ("7 de Octubre", "CLUB GRIEGOS ISJ", 0, 0, "CENTRO DE FORMACION DEL CLUB AMERICA HERMOSILLO", 0),
-            ("7 de Octubre", "Piratitas del Sahuaro FC", 0, 0, "ELECTRICA FLORES BRAVOS HERMOSILLO", 0),
-            ("7 de Octubre", "TELETONES", 0, 0, "MASTER FC JUAREZ", 0),
-        ]
-        cursor.executemany(
-            "INSERT INTO partidos (jornada, local, goles_local, goles_visita, visita, jugado) VALUES (?, ?, ?, ?, ?, ?)",
-            partidos_default,
-        )
-
-    conn.commit()
     conn.close()
 
 
@@ -104,24 +94,25 @@ def inicializar_base_datos():
 inicializar_base_datos()
 
 
-# Funciones para cargar datos desde SQLite
-def cargar_datos_sqlite():
+# Funciones para cargar datos desde la base de datos
+def cargar_datos_db():
     conn = obtener_conexion()
     
     # Cargar equipos
     df_eq = pd.read_sql("SELECT nombre AS Equipo FROM equipos", conn)
     equipos_lista = df_eq["Equipo"].tolist()
 
-    # Cargar partidos
+    # Cargar partidos incluyendo el ID único de la base de datos
     df_part = pd.read_sql(
-        "SELECT jornada AS Jornada, local AS Local, goles_local AS 'Goles Local', goles_visita AS 'Goles Visita', visita AS Visita, jugado AS Jugado FROM partidos",
+        "SELECT id, jornada AS Jornada, local AS Local, goles_local AS 'Goles Local', goles_visita AS 'Goles Visita', visita AS Visita, jugado AS Jugado FROM partidos",
         conn,
     )
-    df_part["Jugado"] = df_part["Jugado"].astype(bool)
+    if not df_part.empty:
+        df_part["Jugado"] = df_part["Jugado"].astype(bool)
 
     # Cargar goleadores
     df_gol = pd.read_sql(
-        "SELECT jugador AS Jugador, equipo AS Equipo, goles AS Goles FROM goleadores",
+        "SELECT id, jugador AS Jugador, equipo AS Equipo, goles AS Goles FROM goleadores",
         conn,
     )
     
@@ -133,7 +124,7 @@ def cargar_datos_sqlite():
 if "datos_cargados" not in st.session_state:
     st.session_state.datos_cargados = True
 
-equipos_lista, df, df_gols = cargar_datos_sqlite()
+equipos_lista, df, df_gols = cargar_datos_db()
 
 # --- ESTILOS CSS PERSONALIZADOS ---
 st.markdown(
@@ -167,7 +158,7 @@ with col_logo:
         st.markdown("🏟️", unsafe_allow_html=True)
 with col_titulo:
     st.title("🏆 Torneo de Fútbol - CRIT SONORA")
-    st.markdown("⚽ *Seguimiento en tiempo real con Base de Datos SQLite.*")
+    st.markdown("⚽ *Seguimiento en tiempo real.*")
 
 st.markdown("---")
 
@@ -183,8 +174,22 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.subheader("🌟 Clasificación y Tablas por Fase")
     
+    stats = {
+        eq: {
+            "JJ": 0,
+            "G": 0,
+            "E": 0,
+            "P": 0,
+            "GF": 0,
+            "GC": 0,
+            "DG": 0,
+            "Pts": 0,
+        }
+        for eq in equipos_lista
+    }
+
     if df.empty:
-        st.info("ℹ️ No hay partidos registrados.")
+        st.info("ℹ️ No hay partidos registrados todavía. Ve al Panel de Administración para programar encuentros o nuevas fases.")
     else:
         jornadas_disponibles = df["Jornada"].dropna().unique().tolist()
         opciones_tabla = ["📊 Tabla General (Toda la Temporada / Acumulada)"] + [f"Fase/Jornada: {j}" for j in jornadas_disponibles]
@@ -198,20 +203,6 @@ with tab1:
             jornada_elegida = tabla_seleccionada.replace("Fase/Jornada: ", "")
             df_a_procesar = df[df["Jornada"] == jornada_elegida]
             st.markdown(f"### 📋 Tabla / Resultados de: {jornada_elegida}")
-
-        stats = {
-            eq: {
-                "JJ": 0,
-                "G": 0,
-                "E": 0,
-                "P": 0,
-                "GF": 0,
-                "GC": 0,
-                "DG": 0,
-                "Pts": 0,
-            }
-            for eq in equipos_lista
-        }
 
         for _, row in df_a_procesar[df_a_procesar["Jugado"] == True].iterrows():
             loc, vis = str(row["Local"]), str(row["Visita"])
@@ -244,23 +235,23 @@ with tab1:
                     stats[vis]["E"] += 1
                     stats[vis]["Pts"] += 1
 
-        for eq in stats:
-            stats[eq]["DG"] = stats[eq]["GF"] - stats[eq]["GC"]
+    for eq in stats:
+        stats[eq]["DG"] = stats[eq]["GF"] - stats[eq]["GC"]
 
-        df_tabla = pd.DataFrame.from_dict(stats, orient="index").reset_index()
-        df_tabla.rename(columns={"index": "Equipo"}, inplace=True)
-        df_tabla = df_tabla.sort_values(
-            by=["Pts", "DG", "GF"], ascending=[False, False, False]
-        ).reset_index(drop=True)
-        df_tabla.index = df_tabla.index + 1
+    df_tabla = pd.DataFrame.from_dict(stats, orient="index").reset_index()
+    df_tabla.rename(columns={"index": "Equipo"}, inplace=True)
+    df_tabla = df_tabla.sort_values(
+        by=["Pts", "DG", "GF"], ascending=[False, False, False]
+    ).reset_index(drop=True)
+    df_tabla.index = df_tabla.index + 1
 
-        st.dataframe(df_tabla, use_container_width=True, height=600)
+    st.dataframe(df_tabla, use_container_width=True, height=600)
 
 # Pestaña 2: Calendario y Resultados
 with tab2:
     st.subheader("📅 Calendario y Resultados por Jornada / Fase")
     if df.empty:
-        st.info("ℹ️ No hay encuentros programados.")
+        st.info("ℹ️ No hay encuentros programados. Usa la pestaña 'Administrar Torneo' para agregar nuevos partidos o fases (Cuartos de Final, Semifinal, Final).")
     else:
         jornadas_disponibles = df["Jornada"].dropna().unique().tolist()
         jornada_sel = st.selectbox(
@@ -289,7 +280,7 @@ with tab3:
             drop=True
         )
         df_gols_sorted.index = df_gols_sorted.index + 1
-        st.dataframe(df_gols_sorted, use_container_width=True)
+        st.dataframe(df_gols_sorted[["Jugador", "Equipo", "Goles"]], use_container_width=True)
 
 # Pestaña 4: Administrar Torneo
 with tab4:
@@ -326,11 +317,12 @@ with tab4:
                     nuevo_eq = st.text_input("Nombre del nuevo equipo:")
                     btn_add_eq = st.form_submit_button("Agregar Equipo")
                     if btn_add_eq:
-                        if nuevo_eq and nuevo_eq not in equipos_lista:
+                        nuevo_eq_upper = nuevo_eq.strip().upper()
+                        if nuevo_eq_upper and nuevo_eq_upper not in equipos_lista:
                             try:
-                                cursor.execute("INSERT INTO equipos (nombre) VALUES (?)", (nuevo_eq,))
+                                cursor.execute("INSERT INTO equipos (nombre) VALUES (?)", (nuevo_eq_upper,))
                                 conn.commit()
-                                st.success(f"✅ ¡Equipo '{nuevo_eq}' agregado y guardado en SQLite!")
+                                st.success(f"✅ ¡Equipo '{nuevo_eq_upper}' agregado con éxito!")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error: {e}")
@@ -345,13 +337,14 @@ with tab4:
                     )
                     btn_edit_eq = st.form_submit_button("Guardar Cambios")
                     if btn_edit_eq:
-                        if nuevo_nombre_eq and nuevo_nombre_eq not in equipos_lista:
-                            cursor.execute("UPDATE equipos SET nombre = ? WHERE nombre = ?", (nuevo_nombre_eq, eq_a_mod))
-                            cursor.execute("UPDATE partidos SET local = ? WHERE local = ?", (nuevo_nombre_eq, eq_a_mod))
-                            cursor.execute("UPDATE partidos SET visita = ? WHERE visita = ?", (nuevo_nombre_eq, eq_a_mod))
-                            cursor.execute("UPDATE goleadores SET equipo = ? WHERE equipo = ?", (nuevo_nombre_eq, eq_a_mod))
+                        nuevo_nombre_upper = nuevo_nombre_eq.strip().upper()
+                        if nuevo_nombre_upper and (nuevo_nombre_upper == eq_a_mod or nuevo_nombre_upper not in equipos_lista):
+                            cursor.execute("UPDATE equipos SET nombre = ? WHERE nombre = ?", (nuevo_nombre_upper, eq_a_mod))
+                            cursor.execute("UPDATE partidos SET local = ? WHERE local = ?", (nuevo_nombre_upper, eq_a_mod))
+                            cursor.execute("UPDATE partidos SET visita = ? WHERE visita = ?", (nuevo_nombre_upper, eq_a_mod))
+                            cursor.execute("UPDATE goleadores SET equipo = ? WHERE equipo = ?", (nuevo_nombre_upper, eq_a_mod))
                             conn.commit()
-                            st.success(f"✅ ¡Equipo '{eq_a_mod}' renombrado a '{nuevo_nombre_eq}' en SQLite!")
+                            st.success(f"✅ ¡Equipo '{eq_a_mod}' renombrado a '{nuevo_nombre_upper}' con éxito!")
                             st.rerun()
                         else:
                             st.warning("⚠️ El nuevo nombre está vacío o ya existe.")
@@ -364,7 +357,7 @@ with tab4:
                         cursor.execute("DELETE FROM equipos WHERE nombre = ?", (eq_a_del,))
                         cursor.execute("DELETE FROM partidos WHERE local = ? OR visita = ?", (eq_a_del, eq_a_del))
                         conn.commit()
-                        st.success(f"✅ ¡Equipo '{eq_a_del}' eliminado de SQLite!")
+                        st.success(f"✅ ¡Equipo '{eq_a_del}' eliminado del torneo!")
                         st.rerun()
 
         elif admin_opcion == "⚽ Administrar Partidos (Agregar / Editar / Eliminar)":
@@ -393,7 +386,7 @@ with tab4:
                                 (nueva_jornada, equipo_local, equipo_visita)
                             )
                             conn.commit()
-                            st.success("✅ ¡Nuevo partido y fase guardados en SQLite!")
+                            st.success("✅ ¡Partido agregado con éxito!")
                             st.rerun()
                         else:
                             st.warning("⚠️ Asegúrate de escribir la jornada/fase y que el local y visita sean distintos.")
@@ -405,13 +398,13 @@ with tab4:
                     with st.form("form_edit_partido"):
                         df_edit = df.reset_index(drop=True)
                         partidos_ids = [
-                            f"[{row['Jornada']}] {row['Local']} vs {row['Visita']} (Idx: {idx})"
+                            f"ID: {row['id']} - [{row['Jornada']}] {row['Local']} vs {row['Visita']}"
                             for idx, row in df_edit.iterrows()
                         ]
                         partido_elegido = st.selectbox("Selecciona el partido a editar:", partidos_ids)
-                        idx_sel = int(partido_elegido.split("(Idx: ")[1].replace(")", ""))
+                        partido_id_sel = int(partido_elegido.split("ID: ")[1].split(" - ")[0])
 
-                        row_actual = df_edit.loc[idx_sel]
+                        row_actual = df_edit[df_edit["id"] == partido_id_sel].iloc[0]
                         nueva_j = st.text_input("Jornada o Fase", value=str(row_actual["Jornada"]))
                         
                         col1, col2 = st.columns(2)
@@ -427,19 +420,12 @@ with tab4:
                         btn_guardar_edit = st.form_submit_button("Actualizar Partido")
                         if btn_guardar_edit:
                             cursor.execute(
-                                "SELECT id FROM partidos WHERE jornada = ? AND local = ? AND visita = ?",
-                                (str(row_actual["Jornada"]), str(row_actual["Local"]), str(row_actual["Visita"]))
+                                "UPDATE partidos SET jornada = ?, local = ?, goles_local = ?, goles_visita = ?, visita = ?, jugado = ? WHERE id = ?",
+                                (nueva_j, nuevo_l, g_l, g_v, nuevo_v, int(jugado_val), partido_id_sel)
                             )
-                            res = cursor.fetchone()
-                            if res:
-                                p_id = res[0]
-                                cursor.execute(
-                                    "UPDATE partidos SET jornada = ?, local = ?, goles_local = ?, goles_visita = ?, visita = ?, jugado = ? WHERE id = ?",
-                                    (nueva_j, nuevo_l, g_l, g_v, nuevo_v, int(jugado_val), p_id)
-                                )
-                                conn.commit()
-                                st.success("✅ ¡Partido actualizado en SQLite!")
-                                st.rerun()
+                            conn.commit()
+                            st.success("✅ ¡Partido actualizado y guardado correctamente!")
+                            st.rerun()
 
             elif sub_partido_op == "Eliminar Partido":
                 if df.empty:
@@ -448,101 +434,119 @@ with tab4:
                     with st.form("form_del_partido"):
                         df_del = df.reset_index(drop=True)
                         partidos_ids_del = [
-                            f"[{row['Jornada']}] {row['Local']} vs {row['Visita']} (Idx: {idx})"
+                            f"ID: {row['id']} - [{row['Jornada']}] {row['Local']} vs {row['Visita']}"
                             for idx, row in df_del.iterrows()
                         ]
                         partido_a_borrar = st.selectbox("Selecciona el partido a eliminar:", partidos_ids_del)
-                        idx_del = int(partido_a_borrar.split("(Idx: ")[1].replace(")", ""))
-                        row_a_borrar = df_del.loc[idx_del]
+                        partido_id_del = int(partido_a_borrar.split("ID: ")[1].split(" - ")[0])
 
                         btn_confirmar_del = st.form_submit_button("Eliminar Partido Seleccionado")
                         if btn_confirmar_del:
-                            cursor.execute(
-                                "DELETE FROM partidos WHERE jornada = ? AND local = ? AND visita = ?",
-                                (str(row_a_borrar["Jornada"]), str(row_a_borrar["Local"]), str(row_a_borrar["Visita"]))
-                            )
+                            cursor.execute("DELETE FROM partidos WHERE id = ?", (partido_id_del,))
                             conn.commit()
-                            st.success("🗑️ ¡Partido eliminado de SQLite!")
+                            st.success("🗑️ ¡Partido eliminado con éxito!")
                             st.rerun()
 
         elif admin_opcion == "Actualizar Resultados de Partidos":
-            with st.form("form_resultado"):
-                df_reset = df.reset_index(drop=True)
-                if df_reset.empty:
-                    st.info("No hay partidos registrados.")
-                    st.form_submit_button("Sin partidos")
-                else:
-                    lista_partidos_ids = []
-                    for idx, row in df_reset.iterrows():
-                        p_id = f"[{str(row['Jornada'])}]: {str(row['Local'])} vs {str(row['Visita'])}"
-                        lista_partidos_ids.append(p_id)
-                    
-                    df_reset["Partido_ID"] = lista_partidos_ids
-                    partido_sel = st.selectbox("Selecciona el partido a actualizar:", df_reset["Partido_ID"].tolist())
-                    fila_partido = df_reset[df_reset["Partido_ID"] == partido_sel].iloc[0]
+            df_reset = df.reset_index(drop=True)
+            if df_reset.empty:
+                st.info("ℹ️ No hay partidos registrados todavía para actualizar. Agrega partidos primero.")
+            else:
+                st.markdown("### ⚽ Actualizar Resultado y Marcador")
+                lista_partidos_ids = []
+                for idx, row in df_reset.iterrows():
+                    p_id = f"ID: {row['id']} - [{str(row['Jornada'])}]: {str(row['Local'])} vs {str(row['Visita'])}"
+                    lista_partidos_ids.append(p_id)
+                
+                partido_sel = st.selectbox("Selecciona el partido a actualizar:", lista_partidos_ids)
+                partido_id_sel = int(partido_sel.split("ID: ")[1].split(" - ")[0])
 
-                    nuevo_g_loc = st.number_input("Goles Local", min_value=0, step=1, value=int(fila_partido["Goles Local"]))
-                    nuevo_g_vis = st.number_input("Goles Visita", min_value=0, step=1, value=int(fila_partido["Goles Visita"]))
-                    marcar_jugado = st.checkbox("¿Partido Jugado?", value=bool(fila_partido["Jugado"]))
+                fila_partido = df_reset[df_reset["id"] == partido_id_sel].iloc[0]
 
-                    submitted = st.form_submit_button("Guardar Resultado")
-                    if submitted:
-                        cursor.execute(
-                            "UPDATE partidos SET goles_local = ?, goles_visita = ?, jugado = ? WHERE jornada = ? AND local = ? AND visita = ?",
-                            (nuevo_g_loc, nuevo_g_vis, int(marcar_jugado), str(fila_partido["Jornada"]), str(fila_partido["Local"]), str(fila_partido["Visita"]))
-                        )
-                        conn.commit()
-                        st.success("✅ ¡Resultado guardado en SQLite con éxito!")
-                        st.rerun()
+                col_g1, col_g2 = st.columns(2)
+                with col_g1:
+                    nuevo_g_loc = st.number_input(f"Goles ({fila_partido['Local']})", min_value=0, step=1, value=int(fila_partido["Goles Local"]), key="g_loc_input")
+                with col_g2:
+                    nuevo_g_vis = st.number_input(f"Goles ({fila_partido['Visita']})", min_value=0, step=1, value=int(fila_partido["Goles Visita"]), key="g_vis_input")
+                
+                marcar_jugado = st.checkbox("¿Marcar como Partido Jugado?", value=bool(fila_partido["Jugado"]), key="jugado_input")
+
+                if st.button("💾 Guardar Resultado en la Base de Datos"):
+                    cursor.execute(
+                        "UPDATE partidos SET goles_local = ?, goles_visita = ?, jugado = ? WHERE id = ?",
+                        (int(nuevo_g_loc), int(nuevo_g_vis), int(marcar_jugado), int(partido_id_sel))
+                    )
+                    conn.commit()
+                    st.success(f"✅ ¡Resultado guardado con éxito para el partido ID {partido_id_sel}!")
+                    st.rerun()
 
         elif admin_opcion == "Actualizar o Agregar Goleadores":
-            with st.form("form_goleador"):
-                lista_opciones = ["+ Agregar Nuevo Jugador"]
-                df_gols_reset = df_gols.reset_index(drop=True)
-                if not df_gols_reset.empty:
-                    lista_opciones = df_gols_reset["Jugador"].tolist() + ["+ Agregar Nuevo Jugador"]
+            st.markdown("### 👟 Actualizar o Agregar Goleador")
+            df_gols_reset = df_gols.reset_index(drop=True)
+            
+            # Crear opciones identificadas por ID único para evitar mezclar registros
+            opciones_goleadores = ["+ Agregar Nuevo Jugador"]
+            mapa_goleadores = {}
+            if not df_gols_reset.empty:
+                for _, row in df_gols_reset.iterrows():
+                    etiqueta = f"ID: {row['id']} - {row['Jugador']} ({row['Equipo']})"
+                    opciones_goleadores.append(etiqueta)
+                    mapa_goleadores[etiqueta] = row
 
-                jugador_sel = st.selectbox("Selecciona o registra jugador:", lista_opciones)
+            goleador_sel = st.selectbox("Selecciona o registra jugador:", opciones_goleadores)
 
-                if jugador_sel == "+ Agregar Nuevo Jugador":
+            if goleador_sel == "+ Agregar Nuevo Jugador":
+                with st.form("form_add_goleador_nuevo"):
                     nuevo_jugador = st.text_input("Nombre del Nuevo Jugador")
                     nuevo_equipo = st.selectbox("Equipo del Jugador", equipos_lista)
                     nuevos_goles = st.number_input("Goles Totales", min_value=0, step=1, value=1)
                     add_g = st.form_submit_button("Registrar Nuevo Goleador")
-                    if add_g and nuevo_jugador:
+                    if add_g:
+                        if nuevo_jugador.strip() != "":
+                            cursor.execute(
+                                "INSERT INTO goleadores (jugador, equipo, goles) VALUES (?, ?, ?)",
+                                (nuevo_jugador.strip().upper(), nuevo_equipo, nuevos_goles)
+                            )
+                            conn.commit()
+                            st.success(f"✅ ¡Goleador '{nuevo_jugador.strip().upper()}' registrado con éxito!")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Por favor escribe el nombre del jugador.")
+            else:
+                datos_jugador = mapa_goleadores[goleador_sel]
+                id_jugador = int(datos_jugador["id"])
+                goles_actuales = int(datos_jugador["Goles"])
+                nombre_jugador = datos_jugador["Jugador"]
+
+                with st.form(f"form_up_goles_{id_jugador}"):
+                    st.markdown(f"**Jugador seleccionado:** {nombre_jugador} ({datos_jugador['Equipo']})")
+                    actualizar_goles = st.number_input("Actualizar Goles Totales", min_value=0, step=1, value=goles_actuales)
+                    btn_up_goles = st.form_submit_button("💾 Actualizar Goles del Jugador")
+                    
+                    if btn_up_goles:
                         cursor.execute(
-                            "INSERT INTO goleadores (jugador, equipo, goles) VALUES (?, ?, ?)",
-                            (nuevo_jugador, nuevo_equipo, nuevos_goles)
+                            "UPDATE goleadores SET goles = ? WHERE id = ?",
+                            (int(actualizar_goles), id_jugador)
                         )
                         conn.commit()
-                        st.success(f"✅ ¡Goleador '{nuevo_jugador}' registrado en SQLite!")
-                        st.rerun()
-                else:
-                    goles_actuales = int(df_gols_reset[df_gols_reset["Jugador"] == jugador_sel]["Goles"].values[0])
-                    actualizar_goles = st.number_input("Actualizar Goles", min_value=0, step=1, value=goles_actuales)
-                    up_g = st.form_submit_button("Actualizar Goles del Jugador")
-                    if up_g:
-                        cursor.execute(
-                            "UPDATE goleadores SET goles = ? WHERE jugador = ?",
-                            (actualizar_goles, jugador_sel)
-                        )
-                        conn.commit()
-                        st.success("✅ ¡Goles actualizados en SQLite!")
+                        st.success(f"✅ ¡Goles actualizados con éxito para {nombre_jugador}!")
                         st.rerun()
 
         elif admin_opcion == "🗑️ Eliminar Goleadores":
-            with st.form("form_eliminar_goleador"):
-                df_gols_reset = df_gols.reset_index(drop=True)
-                if df_gols_reset.empty:
-                    st.info("No hay goleadores registrados.")
-                    st.form_submit_button("Sin registros")
-                else:
-                    jugador_a_eliminar = st.selectbox("Selecciona el jugador a eliminar:", df_gols_reset["Jugador"].tolist())
-                    btn_del_g = st.form_submit_button("Eliminar Goleador")
+            df_gols_reset = df_gols.reset_index(drop=True)
+            if df_gols_reset.empty:
+                st.info("ℹ️ No hay goleadores registrados para eliminar.")
+            else:
+                with st.form("form_del_goleador"):
+                    opciones_del = [f"ID: {row['id']} - {row['Jugador']} ({row['Equipo']})" for _, row in df_gols_reset.iterrows()]
+                    goleador_a_eliminar = st.selectbox("Selecciona el jugador a eliminar:", opciones_del)
+                    
+                    btn_del_g = st.form_submit_button("🗑️ Eliminar Goleador Seleccionado")
                     if btn_del_g:
-                        cursor.execute("DELETE FROM goleadores WHERE jugador = ?", (jugador_a_eliminar,))
+                        id_del = int(goleador_a_eliminar.split("ID: ")[1].split(" - ")[0])
+                        cursor.execute("DELETE FROM goleadores WHERE id = ?", (id_del,))
                         conn.commit()
-                        st.success("✅ ¡Goleador eliminado de SQLite!")
+                        st.success("✅ ¡Goleador eliminado con éxito!")
                         st.rerun()
 
         conn.close()
