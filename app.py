@@ -3,7 +3,7 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 
-# Configuración inicial de la página web
+
 st.set_page_config(
     page_title="Torneo de Fútbol - Teletón Sonora", page_icon="⚽", layout="wide"
 )
